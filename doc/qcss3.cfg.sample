@@ -1,0 +1,13 @@
+%YAML 1.1
+---
+
+collector:
+  lb: { lb1.example.org: public,
+        lb2.example.org: public,
+        lb3.example.org: public,
+        lb4.example.org: public }
+database:
+  host: localhost
+  username: qcss3
+  password: qcss3
+  database: qcss3

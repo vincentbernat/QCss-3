@@ -1,0 +1,72 @@
+QCss3
+========
+
+QCss3 is an application to gather information on load balancers
+through SNMP, store them and serve them through a Web interface or a
+REST API.
+
+Installation
+------------
+
+To use this application, you need the following Debian packages:
+ - postgresql-8.2 (PostgreSQL 8.2 - http://www.postgresql.org)
+ - python-psycopg2 (Psycopg - http://initd.org/psycopg/)
+ - python-twisted-core (Twisted - http://twistedmatrix.com)
+ - python-twisted-names (Twisted Names - http://twistedmatrix.com)
+ - python-nevow (Nevow - http://divmod.org/trac/wiki/DivmodNevow)
+ - python-yaml (PyYAML - http://pyyaml.org/)
+
+You then need to create a database and install the corresponding
+schema. As postgres user ("su - postgres"), you can use the following:
+
+  createuser -P qcss3
+  createdb -O qcss3 qcss3
+
+Then load the content of doc/database.sql:
+
+  psql -h localhost -U qcss3 -W < doc/database.sql
+
+You need to write a "qcss3.cfg" file. See doc/qcss3.cfg.sample for
+an example. The default path for this file is
+/etc/qcss3/qcss3.cfg. You can alter it with "--config" option.
+
+You can install the application with:
+ python setup.py build
+ sudo python setup.py install
+
+If you do not wish to install the application, you still need to
+compile the module to build SNMP queries. This can be done with:
+ python setup.py build_ext --inplace
+
+You can launch the application by hand
+ twistd -no qcss3
+or
+ twistd -no qcss3 --config=/etc/qcss3/qcss3.cfg
+
+By default, QCss3 only listens on localhost. You can change this using:
+ twistd -no qcss3 --interface=0.0.0.0
+
+License
+-------
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3, or (at your option)
+any later version.
+
+See LICENSE file for the complete text. Moreover, to avoid any problem
+with SNMP bindings using NetSNMP which may be linked with OpenSSL,
+there is an exception for OpenSSL:
+
+ In addition, as a special exception, a permission to link the code
+ with the OpenSSL project's "OpenSSL" library (or with modified
+ versions of it that use the same license as the "OpenSSL" library),
+ and distribute the linked executables is given.  You must obey the
+ GNU General Public License in all respects for all of the code used
+ other than "OpenSSL".  If you modify this file, you may extend this
+ exception to your version of the file, but you are not obligated to
+ do so.  If you do not wish to do so, delete this exception statement
+ from your version.
+
+snmp.c is licensed under MIT/X11 license. See the license at the top
+of the file.

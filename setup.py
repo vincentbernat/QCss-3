@@ -29,6 +29,7 @@ if __name__ == "__main__":
           packages=["qcss3",
                     "qcss3.collector",
                     "qcss3.core",
+                    "qcss3.web",
                     "twisted.plugins"],
           package_data={'twisted': ['plugins/qcss3_plugin.py']}
           )

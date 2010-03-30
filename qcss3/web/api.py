@@ -1,6 +1,7 @@
 from nevow import rend, tags as T, loaders
 
 from qcss3.web.timetravel import PastResource, IPastDate, PastConnectionPool
+from qcss3.web.search import SearchResource
 from qcss3.web.common import IApiVersion
 
 class ApiResource(rend.Page):
@@ -53,3 +54,6 @@ class ApiVersionedResource(rend.Page):
         except KeyError:
             return PastResource(self)
         return None
+
+    def child_search(self, ctx):
+        return SearchResource(self.dbpool)

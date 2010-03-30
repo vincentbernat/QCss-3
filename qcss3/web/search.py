@@ -13,7 +13,6 @@ from nevow import rend, loaders
 from nevow import tags as T
 
 from qcss3.web.json import JsonPage
-from qcss3.web.common import IApiVersion
 
 class SearchResource(rend.Page):
 
@@ -35,8 +34,8 @@ class SearchIn:
     Generic search facility.
 
     To use this class, C{query} should be implemented to return a
-    query that should return URL (without prefix) of matching
-    results. The URL will be prefixed by API version.
+    query that should return URL of matching
+    results.
     """
     
 
@@ -49,13 +48,12 @@ class SearchIn:
 
     def search(self, ctx):
         """
-        Run the search query and prefix the results with API URL.
+        Run the search query.
         """
-        api = IApiVersion(ctx)
         d = self.dbpool.runQueryInPast(ctx,
-                                       self.query(), {'term': self.term})
-        d.addCallback(lambda results:
-                          ["/api/%s/%s" % (api, y[0]) for y in results])
+                                       self.query(),
+                                       {'term': self.term})
+        d.addCallback(lambda results: [y[0] for y in results])
         return d
 
 class SearchInLoadBalancer(SearchIn):
@@ -65,7 +63,7 @@ class SearchInLoadBalancer(SearchIn):
 
     def query(self):
        return """
-SELECT 'loadbalancer/' || name || '/'
+SELECT '/loadbalancer/' || name || '/'
 FROM loadbalancer
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
@@ -80,7 +78,7 @@ class SearchInVirtualServer(SearchIn):
 
     def query(self):
         return """
-SELECT 'loadbalancer/' || lb || '/virtualserver/' || vs || '/'
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
 FROM virtualserver
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
@@ -95,7 +93,7 @@ class SearchInVirtualServerExtra(SearchIn):
 
     def query(self):
         return """
-SELECT 'loadbalancer/' || lb || '/virtualserver/' || vs || '/'
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
 FROM virtualserver_extra
 WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'
@@ -108,7 +106,7 @@ class SearchInRealServer(SearchIn):
 
     def query(self):
         return """
-SELECT 'loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
 FROM realserver
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
@@ -122,7 +120,7 @@ class SearchInRealServerExtra(SearchIn):
 
     def query(self):
         return """
-SELECT 'loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
 FROM realserver_extra
 WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'

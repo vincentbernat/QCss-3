@@ -3,6 +3,7 @@ from nevow import rend, tags as T, loaders
 from qcss3.web.timetravel import PastResource, IPastDate, PastConnectionPool
 from qcss3.web.search import SearchResource
 from qcss3.web.equipment import LoadBalancerResource
+from qcss3.web.refresh import RefreshResource
 from qcss3.web.common import IApiVersion
 
 class ApiResource(rend.Page):
@@ -41,13 +42,6 @@ class ApiVersionedResource(rend.Page):
         self.collector = collector
         rend.Page.__init__(self)
 
-    def child_refresh(self, ctx):
-        self.collector.refresh()
-        p = rend.Page(docFactory=loaders.stan(T.html [ T.body [
-                        T.p ["Refresh started"] ] ]))
-        p.addSlash = True
-        return p
-
     def child_past(self, ctx):
         try:
             # Check if we already got a date
@@ -61,3 +55,6 @@ class ApiVersionedResource(rend.Page):
 
     def child_search(self, ctx):
         return SearchResource(self.dbpool)
+
+    def child_refresh(self, ctx):
+        return RefreshResource(self.dbpool, self.collector)

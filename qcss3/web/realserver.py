@@ -1,4 +1,5 @@
 from qcss3.web.json import JsonPage
+from qcss3.web.refresh import RefreshResource
 
 class RealOrSorryServerResource(JsonPage):
     """
@@ -138,6 +139,10 @@ AND rs.rs = %(vs)s
                                         'rs': self.rs}))
         d.addCallback(self.result_extra)
         return d
+
+    def child_refresh(self, ctx):
+        return RefreshResource(self.dbpool, self.collector,
+                               self.lb, self.vs, self.rs)
 
 class RealServerDetailResource(RealOrSorryServerDetailResource):
     sorry = False

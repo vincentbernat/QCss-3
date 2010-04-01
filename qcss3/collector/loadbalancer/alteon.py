@@ -206,7 +206,8 @@ class AlteonCollector(GenericCollector):
                     protocol = "UDP"
                 mode = self.modes[data['slbCurCfgGroupMetric'][".%d" % g]]
                 vs = VirtualServer(name, vip, protocol, mode)
-                vs.extra["state"] = self.states[data['slbCurCfgVirtServerState'][".%d" % v]]
+                vs.extra["virtual server status"] = \
+                    self.states[data['slbCurCfgVirtServerState'][".%d" % v]]
                 vs.extra["healthcheck"] = self.healthchecks.get(
                     data['slbCurCfgGroupHealthCheckLayer'][".%d" % g],
                     "unknown")

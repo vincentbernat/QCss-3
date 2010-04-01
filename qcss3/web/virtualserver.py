@@ -1,4 +1,31 @@
 from qcss3.web.json import JsonPage
+from qcss3.web.realserver import RealServerResource
+
+def aggregate_state(states):
+    if not states:
+        return "ok"
+    state = states[0]
+    for rstate in state[1:]:
+        if rstate == "ok":
+            if cur == "disabled":
+                state = "ok"
+                continue
+            if cur == "down":
+                state = "degraded"
+                continue
+            continue
+        if rstate == "disabled":
+            continue
+        if rstate == "down":
+            if cur == "ok":
+                state = "degraded"
+                continue
+            if cur == "disabled":
+                state = "down"
+                continue
+            continue
+    return state
+
 
 class VirtualServerResource(JsonPage):
     """
@@ -47,25 +74,100 @@ AND rs.deleted = 'infinity'
         result = {}
         for vs, name, vip, rstate in data:
             if vs not in result:
-                result[vs] = [name, vip, rstate]
+                result[vs] = [name, vip, [rstate]]
             else:
-                cur = result[vs][2] # Current state (ok, disabled, down, degraded)
-                if rstate == "ok":
-                    if cur == "disabled":
-                        result[vs][2] = "ok"
-                        continue
-                    if cur == "down":
-                        result[vs][2] = "degraded"
-                        continue
-                    continue
-                if rstate == "disabled":
-                    continue
-                if rstate == "down":
-                    if cur == "ok":
-                        result[vs][2] = "degraded"
-                        continue
-                    if cur == "disabled":
-                        result[vs][2] = "down"
-                        continue
-                    continue
+                result[vs][2].append(rstate)
+        for vs in result:
+            result[vs][2] = aggregate_state(result[vs][2])
         return result
+
+    def childFactory(self, ctx, name):
+        return VirtualServerDetailResource(self.lb,
+                                           name,
+                                           self.dbpool,
+                                           self.collector)
+
+class VirtualServerDetailResource(JsonPage):
+    """
+    Give details about a virtual server.
+
+    For example::
+      {"name": "ForumsV4",
+       "state": "ok",
+       "protocol": "tcp",
+       "mode": "round robin",
+       "VIP": " 193.252.117.114:80",
+       "healthcheck": "http"}
+
+    State is the same as in virtual server summary.
+    """
+
+    def __init__(self, lb, vs, dbpool, collector):
+        self.lb = lb
+        self.vs = vs
+        self.dbpool = dbpool
+        self.collector = collector
+        JsonPage.__init__(self)
+
+    def result_general(self, data):
+        if not data:            # Does not exist
+            self.results = None
+        else:
+            self.results = {"name": data[0][0],
+                            "VIP": data[0][1],
+                            "protocol": data[0][2],
+                            "mode": data[0][3]}
+        return self.results
+
+    def result_state(self, data):
+        if self.results is None:
+            return None
+        self.results["state"] = aggregate_state([x[0] for x in data])
+        return self.results
+
+    def result_extra(self, data):
+        if self.results is None:
+            return None
+        for key, value in data:
+            if key not in self.results: # Don't overwrite more important values
+                self.results[key] = value
+        return self.results
+
+    def data_json(self, ctx, data):
+        d = self.dbpool.runQueryInPast(ctx, """
+SELECT vs.name, vs.vip, vs.protocol, vs.mode
+FROM virtualserver vs
+WHERE vs.lb = %(lb)s
+AND vs.vs = %(vs)s
+AND vs.deleted = 'infinity'
+""",
+                                       {'lb': self.lb,
+                                        'vs': self.vs})
+        d.addCallback(self.result_general)
+        d.addCallback(lambda x:
+                          self.dbpool.runQueryInPast(ctx, """
+SELECT rs.rstate
+FROM realserver rs
+WHERE rs.deleted='infinity'
+AND rs.lb = %(lb)s
+AND rs.vs = %(vs)s
+AND NOT rs.sorry
+""",
+                                       {'lb': self.lb,
+                                        'vs': self.vs}))
+        d.addCallback(self.result_state)
+        d.addCallback(lambda x:
+                          self.dbpool.runQueryInPast(ctx, """
+SELECT vs.key, vs.value
+FROM virtualserver_extra vs
+WHERE vs.deleted='infinity'
+AND vs.lb = %(lb)s
+AND vs.vs = %(vs)s
+""",
+                                       {'lb': self.lb,
+                                        'vs': self.vs}))
+        d.addCallback(self.result_extra)
+        return d
+
+    def child_realserver(self, ctx, data):
+        return RealServerResource(self.lb, self.vs, self.dbpool, self.collector)

@@ -17,8 +17,6 @@ class JsonPage(rend.Page):
         if inevow.ICurrentSegments(ctx)[-1] != '':
             request.redirect(request.URLPath().child(''))
             return ''
-        request.setHeader("Content-Type",
-                          "application/json; charset=UTF-8")
         d = defer.maybeDeferred(self.data_json, ctx, None)
         d.addCallback(lambda x: self.render_json(ctx, x))
         return d
@@ -67,8 +65,15 @@ class JsonPage(rend.Page):
         def serialize(data):
             return json.serialize(sanitize(data))
 
+        request = inevow.IRequest(ctx)
+        if data is None:
+            request.setResponseCode(404)
+            return "<h1>Resource was not found</h1>"
         d = []
         data = sanitize(data, d)
         d = defer.DeferredList(d)
         d.addCallback(lambda x: serialize(data))
+        d.addCallback(lambda x: request.setHeader("Content-Type",
+                                                  "application/json; "
+                                                  "charset=UTF-8") and x or x)
         return d

@@ -1,5 +1,5 @@
 from qcss3.web.json import JsonPage
-from qcss3.web.realserver import RealServerResource
+from qcss3.web.realserver import RealServerResource, SorryServerResource
 
 def aggregate_state(states):
     if not states:
@@ -169,5 +169,8 @@ AND vs.vs = %(vs)s
         d.addCallback(self.result_extra)
         return d
 
-    def child_realserver(self, ctx, data):
+    def child_realserver(self, ctx):
         return RealServerResource(self.lb, self.vs, self.dbpool, self.collector)
+
+    def child_sorryserver(self, ctx):
+        return SorryServerResource(self.lb, self.vs, self.dbpool, self.collector)

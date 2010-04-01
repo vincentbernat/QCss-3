@@ -1,4 +1,5 @@
 from qcss3.web.json import JsonPage
+from qcss3.web.virtualserver import VirtualServerResource
 
 class LoadBalancerResource(JsonPage):
     """
@@ -60,3 +61,8 @@ AND deleted='infinity'
         return {'name': data[0][0],
                 'description': data[0][1],
                 'type': data[0][2]}
+
+    def child_virtualserver(self, ctx):
+        return VirtualServerResource(self.name,
+                                     self.dbpool,
+                                     self.collector)

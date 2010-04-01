@@ -35,7 +35,12 @@ class JsonPage(rend.Page):
             """
             if type(data) in [list, tuple]:
                 return [sanitize(x, d) for x in data]
-            if type(data) == str:
+            if type(data) is dict:
+                result = {}
+                for x in data:
+                    result[sanitize(x,d)] = sanitize(data[x],d)
+                return result
+            if type(data) is str:
                 return unicode(data, errors='ignore')
             if isinstance(data, rend.Fragment):
                 io = StringIO()

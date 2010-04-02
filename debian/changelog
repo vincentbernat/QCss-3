@@ -1,0 +1,5 @@
+qcss3 (0~git20100402-1) unstable; urgency=low
+
+  * Initial packaging.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 02 Apr 2010 14:52:42 +0200

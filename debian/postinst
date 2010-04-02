@@ -1,0 +1,29 @@
+#! /bin/sh
+
+set -e
+
+user=qcss3
+group=qcss3
+
+if ! ([ "$1" = "configure" ] || [ "$1" = "reconfigure" ]); then
+  exit 0
+fi
+
+[ -d /var/log/qcss3 ] || mkdir /var/log/qcss3
+[ -d /var/run/qcss3 ] || mkdir /var/run/qcss3
+adduser --system --disabled-password --disabled-login --home /var/run/qcss3 \
+         --no-create-home --quiet --group $user
+chown $user.$group /var/run/qcss3
+chown $user.$group /var/log/qcss3
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+        for p in $(pyversions -i); do
+            $p -c 'import qcss3.collector.loadbalancer ; from twisted.plugin import IPlugin, getPlugins; list(getPlugins(IPlugin)) ; list(getPlugins(IPlugin, qcss3.collector.loadbalancer))' >/dev/null 2>&1 || true
+        done
+        ;;
+esac
+
+exit 0

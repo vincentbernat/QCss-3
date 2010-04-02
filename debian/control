@@ -1,0 +1,17 @@
+Source: qcss3
+Section: python
+Priority: optional
+Maintainer: Vincent Bernat <bernat@debian.org>
+Standards-Version: 3.8.0
+Build-Depends: debhelper (>= 5.0.38), cdbs, python-dev, python-central (>= 0.5.6), python-setuptools (>= 0.6b3), python-twisted-core, libsnmp15-dev | libsnmp9-dev | libsnmp-dev
+Homepage: https://trac.luffy.cx/wiremaps/
+XS-Python-Version: current, >= 2.4
+
+Package: qcss3
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}, ${python:Depends}, python-twisted-core (>= 2.4), python-nevow (>= 0.9.26), python-psycopg2, python-twisted-names, python-yaml, adduser
+Suggests: postgresql-server
+XB-Python-Version: ${python:Versions}
+Description: load-balancer web service
+ QCss3 is an application to gather information from various load
+ balancer appliances and present this information as a web service.

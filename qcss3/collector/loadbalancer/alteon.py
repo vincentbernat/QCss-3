@@ -228,7 +228,8 @@ class AlteonCollector(GenericCollector):
                         # protocol is left unchanged
                         weight = data['slbCurCfgRealServerWeight']['.%d' % r]
                         state = self.status[
-                            data['slbVirtServicesInfoState']['.%d.%d.%d' % (v,s,r)]]
+                            data['slbVirtServicesInfoState'].get('.%d.%d.%d' % (v,s,r),
+                                                                 1)]
                         rs = RealServer(name, rip, rport, protocol, weight, state)
                         rs.extra["ping interval"] = \
                             data['slbCurCfgRealServerPingInterval']['.%d' % r]

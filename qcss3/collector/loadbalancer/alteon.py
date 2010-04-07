@@ -14,7 +14,10 @@ be attached to a real server or to a group. A backup group can be
 attached to a group. This information is flattened.
 """
 
+import re
+
 from twisted.plugin import IPlugin
+from twisted.internet import defer
 from zope.interface import implements
 
 from qcss3.collector.icollector import ICollector, ICollectorFactory
@@ -179,68 +182,155 @@ class AlteonCollector(GenericCollector):
         }
 
 
-    def process(self, vs=None, rs=None):
+    def collect(self, vs=None, rs=None):
         """
-        Process all gathered data.
+        Collect data for an Alteon
+        """
+        d = defer.succeed(True)
+
+        if vs is not None:
+            mo = re.match(r"v(\d+)s(\d+)g(\d+)", vs)
+            if not mo:
+                raise ValueError("%r is not a valid virtual server" % vs)
+            v, s, g = int(mo.group(1)), int(mo.group(2)), int(mo.group(3))
+            if rs is not None:
+                mo = re.match(r"r(\d+)", rs)
+                if not mo:
+                    raise ValueError("%r is not a valid real server" % rs)
+                r = int(mo.group(1))
+                # Collect data to refresh a specific real server
+                d.addCallback(lambda x: self.proxy.get(
+                        [(self.oids['slbCurCfgRealServerIpAddr'], r),
+                         (self.oids['slbCurCfgRealServerName'], r),
+                         (self.oids['slbCurCfgVirtServiceRealPort'], v, s),
+                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
+                         (self.oids['slbCurCfgRealServerWeight'], r),
+                         (self.oids['slbVirtServicesInfoState'], v, s, r),
+                         (self.oids['slbCurCfgRealServerPingInterval'], r),
+                         (self.oids['slbCurCfgRealServerFailRetry'], r),
+                         (self.oids['slbCurCfgRealServerSuccRetry'], r)]))
+                d.addCallback(lambda x: self.process_rs(v, s, g, r))
+            else:
+                # Collect data to refresh a virtual server
+                d.addCallback(lambda x: self.proxy.get(
+                        [(self.oids['slbCurCfgVirtServerVname'], v),
+                         (self.oids['slbCurCfgVirtServiceHname'], v, s),
+                         (self.oids['slbCurCfgGroupName'], g),
+                         (self.oids['slbCurCfgVirtServerIpAddress'], v),
+                         (self.oids['slbCurCfgVirtServiceVirtPort'], v, s),
+                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
+                         (self.oids['slbCurCfgVirtServiceRealPort'], v, s),
+                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
+                         (self.oids['slbCurCfgGroupMetric'], g),
+                         (self.oids['slbCurCfgVirtServerState'], v),
+                         (self.oids['slbCurCfgGroupHealthCheckLayer'], g),
+                         (self.oids['slbCurCfgGroupRealServers'], g)]))
+                # Then collect data for all real servers
+                d.addCallback(lambda x:
+                                  self.proxy.walk((self.oids['slbVirtServicesInfoState'], v, s)))
+                for oid in [
+                        'slbCurCfgRealServerIpAddr',
+                        'slbCurCfgRealServerName',
+                        'slbCurCfgRealServerWeight',
+                        'slbCurCfgRealServerPingInterval',
+                        'slbCurCfgRealServerFailRetry',
+                        'slbCurCfgRealServerSuccRetry',
+                        ]:
+                    d.addCallback(lambda x, oid: self.proxy.walk(self.oids[oid]), oid)
+                d.addCallback(lambda x: self.process_vs(v, s, g))
+        else:
+            # Otherwise, collect everything
+            for oid in self.oids:
+                d.addCallback(lambda x, oid: self.proxy.walk(self.oids[oid]), oid)
+            d.addCallback(lambda x: self.process_all())
+        return d
+
+    def process_all(self):
+        """
+        Process data when no virtual server and no real server are provided.
         """
         for v in self.cache('slbCurCfgVirtServerIpAddress'):
             for s in self.cache(('slbCurCfgVirtServiceRealGroup', v)):
                 g = self.cache(('slbCurCfgVirtServiceRealGroup', v, s))
-
-                # (v,s,g) is our tuple for a virtual server, let's build it
-                index = "v%ds%dg%d" % (v, s, g)
-                name = " ~ ".join([x for x in self.cache(
-                            ('slbCurCfgVirtServerVname', v),
-                            ('slbCurCfgVirtServiceHname', v, s),
-                            ('slbCurCfgGroupName', g)) if x])
-                if not name: name = index
-                vip = "%s:%d" % tuple(self.cache(('slbCurCfgVirtServerIpAddress', v),
-                                                 ('slbCurCfgVirtServiceVirtPort', v, s)))
-                protocol = "TCP"
-                if self.cache(('slbCurCfgVirtServiceUDPBalance', v, s)) != 3:
-                    protocol = "UDP"
-                mode = self.modes[self.cache(('slbCurCfgGroupMetric', g))]
-                vs = VirtualServer(name, vip, protocol, mode)
-                vs.extra["virtual server status"] = \
-                    self.states[self.cache(('slbCurCfgVirtServerState', v))]
-                vs.extra["healthcheck"] = self.healthchecks.get(
-                    self.cache(('slbCurCfgGroupHealthCheckLayer', g)),
-                    "unknown")
-                self.lb.virtualservers[index] = vs
-
-                # Find and attach real servers
-                reals = self.cache(('slbCurCfgGroupRealServers', g))
-                for i in range(len(reals)):
-                    if reals[i] == '\x00':
-                        continue
-                    for r in range(8):
-                        if not ord(reals[i]) & (1 << r):
-                            continue
-                        r = 8-r + i*8
-                        # r is the index of our real server
-                        rip, name, rport = self.cache(
-                            ('slbCurCfgRealServerIpAddr', r),
-                            ('slbCurCfgRealServerName', r),
-                            ('slbCurCfgVirtServiceRealPort', v, s))
-                        if not name: name = rip
-                        # protocol is left unchanged
-                        weight = self.cache(('slbCurCfgRealServerWeight', r))
-                        try:
-                            state = self.cache(('slbVirtServicesInfoState', v, s, r))
-                        except KeyError:
-                            state = 1
-                        state = self.status[state]
-                        rs = RealServer(name, rip, rport, protocol, weight, state)
-                        pi, fr, sr = self.cache(
-                            ('slbCurCfgRealServerPingInterval', r),
-                            ('slbCurCfgRealServerFailRetry', r),
-                            ('slbCurCfgRealServerSuccRetry', r))
-                        rs.extra.update({'ping interval': pi,
-                                         'fail retry': fr,
-                                         'success retry': sr})
-                        vs.realservers["r%d" % r] = rs
-
+                vs = self.process_vs(v, s, g)
+                self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = vs
         return self.lb
+
+    def process_vs(self, v, s, g):
+        """
+        Process data for a given virtual server when no real server is provided
+
+        @param v: virtual server
+        @param s: service
+        @param g: group
+        """
+        # (v,s,g) is our tuple for a virtual server, let's build it
+        index = "v%ds%dg%d" % (v, s, g)
+        name = " ~ ".join([x for x in self.cache(
+                    ('slbCurCfgVirtServerVname', v),
+                    ('slbCurCfgVirtServiceHname', v, s),
+                    ('slbCurCfgGroupName', g)) if x])
+        if not name: name = index
+        vip = "%s:%d" % tuple(self.cache(('slbCurCfgVirtServerIpAddress', v),
+                                         ('slbCurCfgVirtServiceVirtPort', v, s)))
+        protocol = "TCP"
+        if self.cache(('slbCurCfgVirtServiceUDPBalance', v, s)) != 3:
+            protocol = "UDP"
+        mode = self.modes[self.cache(('slbCurCfgGroupMetric', g))]
+        vs = VirtualServer(name, vip, protocol, mode)
+        vs.extra["virtual server status"] = \
+            self.states[self.cache(('slbCurCfgVirtServerState', v))]
+        vs.extra["healthcheck"] = self.healthchecks.get(
+            self.cache(('slbCurCfgGroupHealthCheckLayer', g)),
+            "unknown")
+
+        # Find and attach real servers
+        reals = self.cache(('slbCurCfgGroupRealServers', g))
+        for i in range(len(reals)):
+            if reals[i] == '\x00':
+                continue
+            for r in range(8):
+                if not ord(reals[i]) & (1 << r):
+                    continue
+                r = 8-r + i*8
+
+                rs = self.process_rs(v, s, g, r)
+                vs.realservers["r%d" % r] = rs
+
+        return vs
+
+    def process_rs(self, v, s, g, r):
+        """
+        Process data for a given virtual server and real server.
+
+        @param v: virtual server
+        @param s: service
+        @param g: group
+        @param r: real server
+        """
+        rip, name, rport = self.cache(
+            ('slbCurCfgRealServerIpAddr', r),
+            ('slbCurCfgRealServerName', r),
+            ('slbCurCfgVirtServiceRealPort', v, s))
+        if not name: name = rip
+        protocol = "TCP"
+        if self.cache(('slbCurCfgVirtServiceUDPBalance', v, s)) != 3:
+            protocol = "UDP"
+        weight = self.cache(('slbCurCfgRealServerWeight', r))
+        try:
+            state = self.cache(('slbVirtServicesInfoState', v, s, r))
+        except KeyError:
+            state = 1
+        state = self.status[state]
+        rs = RealServer(name, rip, rport, protocol, weight, state)
+        pi, fr, sr = self.cache(
+            ('slbCurCfgRealServerPingInterval', r),
+            ('slbCurCfgRealServerFailRetry', r),
+            ('slbCurCfgRealServerSuccRetry', r))
+        rs.extra.update({'ping interval': pi,
+                         'fail retry': fr,
+                         'success retry': sr})
+        return rs
 
 class AlteonCollectorFactory:
     implements(ICollectorFactory, IPlugin)

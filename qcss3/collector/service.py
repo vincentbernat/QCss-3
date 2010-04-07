@@ -116,8 +116,9 @@ class LoadBalancerCollector:
         return plugins[0].buildCollector(self.config, self.proxy,
                                          self.lb, self.description)
 
-    def writeData(self, data):
-        return self.dbpool.runInteraction(IDatabaseWriter(data).write)
+    def writeData(self, data, vs=None, rs=None):
+        return self.dbpool.runInteraction(IDatabaseWriter(data).write,
+                                          [a for a in [self.lb, vs, rs] if a])
 
     def releaseProxy(self):
         """
@@ -138,7 +139,7 @@ class LoadBalancerCollector:
         d = self.getProxy()
         d.addCallback(lambda x: self.findCollector())
         d.addCallback(lambda x: x.collect(vs, rs))
-        d.addCallback(lambda x: self.writeData(x))
+        d.addCallback(lambda x: self.writeData(x, vs, rs))
         d.addCallbacks(lambda x: self.releaseProxy(),
                        lambda x: self.releaseProxy() or x)
         return d

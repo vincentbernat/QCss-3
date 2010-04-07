@@ -6,18 +6,15 @@ methods to be used by more specific collectors. It is not a complete
 collector.
 """
 
-from twisted.internet import defer
-
 from qcss3.collector.datastore import LoadBalancer
 
 class GenericCollector:
     """
-    Generic collector
+    Helper functions for a collector.
 
     This generic collector needs several class variables:
      - C{oids} should be a mapping between OID names and numerical OID.
      - C{kind} should be a string defining the kind of load balancer
-     - C{process} should be implemented
     """
 
     def __init__(self, config, proxy, name, description):
@@ -40,13 +37,3 @@ class GenericCollector:
                 newoids.append(tuple(no))
         newoids = tuple(newoids)
         return self.proxy.cache(*newoids)
-
-    def collect(self, vs=None, rs=None):
-        d = defer.succeed(True)
-        for oid in self.oids:
-            d.addCallback(lambda x, oid: self.proxy.walk(self.oids[oid]), oid)
-        d.addCallback(lambda x: self.process(vs, rs))
-        return d
-
-    def process(self, vs=None, rs=None):
-        raise NotImplementedError

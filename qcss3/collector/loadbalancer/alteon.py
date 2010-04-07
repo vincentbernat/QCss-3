@@ -179,41 +179,37 @@ class AlteonCollector(GenericCollector):
         }
 
 
-    def process(self, data, vs=None, rs=None):
+    def process(self, vs=None, rs=None):
         """
         Process all gathered data.
-
-        @param data: collected OIDs
         """
-        for v in data['slbCurCfgVirtServerIpAddress']:
-            v = int(v.split(".")[-1])
-            for s in data['slbCurCfgVirtServiceRealGroup']:
-                if int(s.split(".")[-2]) != v:
-                    continue
-                g = int(data['slbCurCfgVirtServiceRealGroup'][s])
-                s = int(s.split(".")[-1])
+        for v in self.cache('slbCurCfgVirtServerIpAddress'):
+            for s in self.cache(('slbCurCfgVirtServiceRealGroup', v)):
+                g = self.cache(('slbCurCfgVirtServiceRealGroup', v, s))
+
                 # (v,s,g) is our tuple for a virtual server, let's build it
                 index = "v%ds%dg%d" % (v, s, g)
-                name = " ~ ".join([x for x in
-                                   [data['slbCurCfgVirtServerVname'][".%d" % v],
-                                    data['slbCurCfgVirtServiceHname'][".%d.%d" % (v, s)],
-                                    data['slbCurCfgGroupName'][".%d" % g]] if x])
+                name = " ~ ".join([x for x in self.cache(
+                            ('slbCurCfgVirtServerVname', v),
+                            ('slbCurCfgVirtServiceHname', v, s),
+                            ('slbCurCfgGroupName', g)) if x])
                 if not name: name = index
-                vip = "%s:%d" % (data['slbCurCfgVirtServerIpAddress'][".%d" % v],
-                                 data['slbCurCfgVirtServiceVirtPort'][".%d.%d" % (v,s)])
+                vip = "%s:%d" % tuple(self.cache(('slbCurCfgVirtServerIpAddress', v),
+                                                 ('slbCurCfgVirtServiceVirtPort', v, s)))
                 protocol = "TCP"
-                if data['slbCurCfgVirtServiceUDPBalance'][".%d.%d" % (v,s)] != 3:
+                if self.cache(('slbCurCfgVirtServiceUDPBalance', v, s)) != 3:
                     protocol = "UDP"
-                mode = self.modes[data['slbCurCfgGroupMetric'][".%d" % g]]
+                mode = self.modes[self.cache(('slbCurCfgGroupMetric', g))]
                 vs = VirtualServer(name, vip, protocol, mode)
                 vs.extra["virtual server status"] = \
-                    self.states[data['slbCurCfgVirtServerState'][".%d" % v]]
+                    self.states[self.cache(('slbCurCfgVirtServerState', v))]
                 vs.extra["healthcheck"] = self.healthchecks.get(
-                    data['slbCurCfgGroupHealthCheckLayer'][".%d" % g],
+                    self.cache(('slbCurCfgGroupHealthCheckLayer', g)),
                     "unknown")
                 self.lb.virtualservers[index] = vs
+
                 # Find and attach real servers
-                reals = data['slbCurCfgGroupRealServers'][".%d" % g]
+                reals = self.cache(('slbCurCfgGroupRealServers', g))
                 for i in range(len(reals)):
                     if reals[i] == '\x00':
                         continue
@@ -222,22 +218,28 @@ class AlteonCollector(GenericCollector):
                             continue
                         r = 8-r + i*8
                         # r is the index of our real server
-                        rip = data['slbCurCfgRealServerIpAddr']['.%d' % r]
-                        name = data['slbCurCfgRealServerName']['.%d' % r] or rip
-                        rport = data['slbCurCfgVirtServiceRealPort']['.%d.%d' % (v,s)]
+                        rip, name, rport = self.cache(
+                            ('slbCurCfgRealServerIpAddr', r),
+                            ('slbCurCfgRealServerName', r),
+                            ('slbCurCfgVirtServiceRealPort', v, s))
+                        if not name: name = rip
                         # protocol is left unchanged
-                        weight = data['slbCurCfgRealServerWeight']['.%d' % r]
-                        state = self.status[
-                            data['slbVirtServicesInfoState'].get('.%d.%d.%d' % (v,s,r),
-                                                                 1)]
+                        weight = self.cache(('slbCurCfgRealServerWeight', r))
+                        try:
+                            state = self.cache(('slbVirtServicesInfoState', v, s, r))
+                        except KeyError:
+                            state = 1
+                        state = self.status[state]
                         rs = RealServer(name, rip, rport, protocol, weight, state)
-                        rs.extra["ping interval"] = \
-                            data['slbCurCfgRealServerPingInterval']['.%d' % r]
-                        rs.extra["fail retry"] = \
-                            data['slbCurCfgRealServerFailRetry']['.%d' % r]
-                        rs.extra["success retry"] = \
-                            data['slbCurCfgRealServerSuccRetry']['.%d' % r]
+                        pi, fr, sr = self.cache(
+                            ('slbCurCfgRealServerPingInterval', r),
+                            ('slbCurCfgRealServerFailRetry', r),
+                            ('slbCurCfgRealServerSuccRetry', r))
+                        rs.extra.update({'ping interval': pi,
+                                         'fail retry': fr,
+                                         'success retry': sr})
                         vs.realservers["r%d" % r] = rs
+
         return self.lb
 
 class AlteonCollectorFactory:

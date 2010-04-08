@@ -182,7 +182,6 @@ class AlteonCollector(GenericCollector):
         163: "script64",
         }
 
-    @defer.inlineCallbacks
     def collect(self, vs=None, rs=None):
         """
         Collect data for an Alteon
@@ -198,33 +197,38 @@ class AlteonCollector(GenericCollector):
                     raise ValueError("%r is not a valid real server" % rs)
                 r = int(mo.group(1))
                 # Collect data to refresh a specific real server
-                d = yield self.process_rs(v, s, g, r)
+                d = self.process_rs(v, s, g, r)
             else:
                 # Collect data to refresh a virtual server
-                d = yield self.process_vs(v, s, g)
+                d = self.process_vs(v, s, g)
         else:
             # Otherwise, collect everything
-            d = yield self.process_all()
-        defer.returnValue(d)
+            d = self.process_all()
+        return d
 
-    @defer.inlineCallbacks
+    @defer.deferredGenerator
     def process_all(self):
         """
         Process data when no virtual server and no real server are provided.
         """
         # Retrieve all data
         for oid in self.oids:
-            yield self.proxy.walk(self.oids[oid])
+            w = defer.waitForDeferred(self.proxy.walk(self.oids[oid]))
+            yield w
+            w.getResult()
 
         # For each virtual server, build it
         for v in self.cache('slbCurCfgVirtServerIpAddress'):
             for s in self.cache(('slbCurCfgVirtServiceRealGroup', v)):
                 g = self.cache(('slbCurCfgVirtServiceRealGroup', v, s))
-                self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = \
-                    yield self.process_vs(v, s, g)
-        defer.returnValue(self.lb)
+                vs = defer.waitForDeferred(self.process_vs(v, s, g))
+                yield vs
+                vs = vs.getResult()
+                self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = vs
+        yield self.lb
+        return
 
-    @defer.inlineCallbacks
+    @defer.deferredGenerator
     def process_vs(self, v, s, g):
         """
         Process data for a given virtual server when no real server is provided
@@ -235,7 +239,7 @@ class AlteonCollector(GenericCollector):
         @return: a maybe deferred C{IVirtualServer}
         """
         # Retrieve some data if needed
-        yield self.cache_or_get(
+        c = defer.waitForDeferred(self.cache_or_get(
             ('slbCurCfgVirtServerVname', v),
             ('slbCurCfgVirtServiceHname', v, s),
             ('slbCurCfgGroupName', g),
@@ -249,7 +253,9 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgGroupHealthCheckLayer', g),
             ('slbCurCfgGroupBackupServer', g),
             ('slbCurCfgGroupBackupGroup', g),
-            ('slbCurCfgGroupRealServers', g))
+            ('slbCurCfgGroupRealServers', g)))
+        yield c
+        c.getResult()
 
         # (v,s,g) is our tuple for a virtual server, let's build it
         index = "v%ds%dg%d" % (v, s, g)
@@ -274,31 +280,45 @@ class AlteonCollector(GenericCollector):
         # Find and attach real servers
         reals = self.cache(('slbCurCfgGroupRealServers', g))
         for r in self.bitmap(reals):
-            rs = yield self.process_rs(v, s, g, r)
+            rs = defer.waitForDeferred(self.process_rs(v, s, g, r))
+            yield rs
+            rs = rs.getResult()
             vs.realservers["r%d" % r] = rs
 
             # Maybe a backup server?
-            backup = yield self.cache_or_get(('slbCurCfgRealServerBackUp', r))
+            backup = defer.waitForDeferred(self.cache_or_get(('slbCurCfgRealServerBackUp', r)))
+            yield backup
+            backup = backup.getResult()
             if backup:
-                rs = yield self.process_rs(v, s, g, backup, True)
+                rs = defer.waitForDeferred(self.process_rs(v, s, g, backup, True))
+                yield rs
+                rs = rs.getResult()
                 vs.realservers["b%d" % backup] = rs
 
         # Attach backup servers
         backup = self.cache(('slbCurCfgGroupBackupServer', g))
         if backup:
-            rs = yield self.process_rs(v, s, g, backup, True)
+            rs = defer.waitForDeferred(self.process_rs(v, s, g, backup, True))
+            yield rs
+            rs = rs.getResult()
             vs.realservers["b%d" % backup] = rs
         backup = self.cache(('slbCurCfgGroupBackupGroup', g))
         if backup:
             # We need to retrieve corresponding real servers.
-            yield self.proxy.get((self.oids['slbCurCfgGroupRealServers'], backup))
+            g = defer.waitForDeferred(
+                self.proxy.get((self.oids['slbCurCfgGroupRealServers'], backup)))
+            yield g
+            g.getResult()
             for r in self.bitmap(self.cache(('slbCurCfgGroupRealServers', backup))):
-                rs = yield self.process_rs(v, s, g, r, True)
+                rs = defer.waitForDeferred(self.process_rs(v, s, g, r, True))
+                yield rs
+                rs = rs.getResult()
                 vs.realservers["b%d" % r] = rs
 
-        defer.returnValue(vs)
+        yield vs
+        return
 
-    @defer.inlineCallbacks
+    @defer.deferredGenerator
     def process_rs(self, v, s, g, r, backup=False):
         """
         Process data for a given virtual server and real server.
@@ -310,7 +330,7 @@ class AlteonCollector(GenericCollector):
         @param backup: is it a backup server?
         """
         # Retrieve some data if needed:
-        yield self.cache_or_get(
+        c = defer.waitForDeferred(self.cache_or_get(
             ('slbCurCfgRealServerIpAddr', r),
             ('slbCurCfgRealServerName', r),
             ('slbCurCfgVirtServiceRealPort', v, s),
@@ -320,7 +340,9 @@ class AlteonCollector(GenericCollector):
             ('slbRealServerInfoState', r),
             ('slbCurCfgRealServerPingInterval', r),
             ('slbCurCfgRealServerFailRetry', r),
-            ('slbCurCfgRealServerSuccRetry', r))
+            ('slbCurCfgRealServerSuccRetry', r)))
+        yield c
+        c.getResult()
 
         # Build the real server
         rip, name, rport = self.cache(
@@ -348,7 +370,8 @@ class AlteonCollector(GenericCollector):
         rs.extra.update({'ping interval': pi,
                          'fail retry': fr,
                          'success retry': sr})
-        defer.returnValue(rs)
+        yield rs
+        return
 
 class AlteonCollectorFactory:
     implements(ICollectorFactory, IPlugin)

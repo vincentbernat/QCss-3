@@ -42,13 +42,17 @@ class GenericCollector:
             return False
         return True
 
-    @defer.inlineCallbacks
+    @defer.deferredGenerator
     def cache_or_get(self, *oids):
         try:
-            defer.returnValue(self.cache(*oids))
+            yield self.cache(*oids)
+            return
         except KeyError:
-            yield self.proxy.get(list(self._extend_oids(*oids)))
-            defer.returnValue(self.cache(*oids))
+            g = defer.waitForDeferred(self.proxy.get(list(self._extend_oids(*oids))))
+            yield g
+            g.getResult()
+            yield self.cache(*oids)
+            return
 
     def cache(self, *oids):
         """

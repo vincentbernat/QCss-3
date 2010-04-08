@@ -333,16 +333,13 @@ class AlteonCollector(GenericCollector):
             protocol = "UDP"
         if not backup:
             weight = self.cache(('slbCurCfgRealServerWeight', r))
-        if not backup:
             try:
                 state = self.status[self.cache(('slbVirtServicesInfoState', v, s, r))]
             except KeyError:
                 state = 'disabled'
-        else:
-            state = self.status[self.cache(('slbRealServerInfoState', r))]
-        if not backup:
             rs = RealServer(name, rip, rport, protocol, weight, state)
         else:
+            state = self.status[self.cache(('slbRealServerInfoState', r))]
             rs = SorryServer(name, rip, rport, protocol, state)
         pi, fr, sr = self.cache(
             ('slbCurCfgRealServerPingInterval', r),

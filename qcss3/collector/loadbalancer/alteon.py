@@ -182,13 +182,11 @@ class AlteonCollector(GenericCollector):
         163: "script64",
         }
 
-
+    @defer.inlineCallbacks
     def collect(self, vs=None, rs=None):
         """
         Collect data for an Alteon
         """
-        d = defer.succeed(True)
-
         if vs is not None:
             mo = re.match(r"v(\d+)s(\d+)g(\d+)", vs)
             if not mo:
@@ -200,71 +198,33 @@ class AlteonCollector(GenericCollector):
                     raise ValueError("%r is not a valid real server" % rs)
                 r = int(mo.group(1))
                 # Collect data to refresh a specific real server
-                d.addCallback(lambda x: self.proxy.get(
-                        [(self.oids['slbCurCfgRealServerIpAddr'], r),
-                         (self.oids['slbCurCfgRealServerName'], r),
-                         (self.oids['slbCurCfgVirtServiceRealPort'], v, s),
-                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
-                         (self.oids['slbCurCfgRealServerWeight'], r),
-                         (self.oids['slbVirtServicesInfoState'], v, s, r),
-                         (self.oids['slbRealServerInfoState'], r),
-                         (self.oids['slbCurCfgRealServerPingInterval'], r),
-                         (self.oids['slbCurCfgRealServerFailRetry'], r),
-                         (self.oids['slbCurCfgRealServerSuccRetry'], r)]))
-                d.addCallback(lambda x: self.process_rs(v, s, g, r))
+                d = yield self.process_rs(v, s, g, r)
             else:
                 # Collect data to refresh a virtual server
-                d.addCallback(lambda x: self.proxy.get(
-                        [(self.oids['slbCurCfgVirtServerVname'], v),
-                         (self.oids['slbCurCfgVirtServiceHname'], v, s),
-                         (self.oids['slbCurCfgGroupName'], g),
-                         (self.oids['slbCurCfgVirtServerIpAddress'], v),
-                         (self.oids['slbCurCfgVirtServiceVirtPort'], v, s),
-                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
-                         (self.oids['slbCurCfgVirtServiceRealPort'], v, s),
-                         (self.oids['slbCurCfgVirtServiceUDPBalance'], v, s),
-                         (self.oids['slbCurCfgGroupMetric'], g),
-                         (self.oids['slbCurCfgVirtServerState'], v),
-                         (self.oids['slbCurCfgGroupHealthCheckLayer'], g),
-                         (self.oids['slbCurCfgGroupBackupServer'], g),
-                         (self.oids['slbCurCfgGroupBackupGroup'], g),
-                         (self.oids['slbCurCfgGroupRealServers'], g)]))
-                # Then collect data for all real servers
-                d.addCallback(lambda x:
-                                  self.proxy.walk((self.oids['slbVirtServicesInfoState'], v, s)))
-                for oid in [
-                        'slbCurCfgRealServerIpAddr',
-                        'slbCurCfgRealServerName',
-                        'slbCurCfgRealServerWeight',
-                        'slbCurCfgRealServerPingInterval',
-                        'slbCurCfgRealServerFailRetry',
-                        'slbCurCfgRealServerSuccRetry',
-                        'slbCurCfgRealServerBackUp',
-                        'slbRealServerInfoState',
-                        ]:
-                    d.addCallback(lambda x, oid: self.proxy.walk(self.oids[oid]), oid)
-                d.addCallback(lambda x: self.process_vs(v, s, g))
+                d = yield self.process_vs(v, s, g)
         else:
             # Otherwise, collect everything
-            for oid in self.oids:
-                d.addCallback(lambda x, oid: self.proxy.walk(self.oids[oid]), oid)
-            d.addCallback(lambda x: self.process_all())
-        return d
+            d = yield self.process_all()
+        defer.returnValue(d)
 
+    @defer.inlineCallbacks
     def process_all(self):
         """
         Process data when no virtual server and no real server are provided.
         """
-        d = defer.succeed(True)
+        # Retrieve all data
+        for oid in self.oids:
+            yield self.proxy.walk(self.oids[oid])
+
+        # For each virtual server, build it
         for v in self.cache('slbCurCfgVirtServerIpAddress'):
             for s in self.cache(('slbCurCfgVirtServiceRealGroup', v)):
                 g = self.cache(('slbCurCfgVirtServiceRealGroup', v, s))
-                d.addCallback(lambda x, v, s, g: self.process_vs(v, s, g), v, s, g)
-                d.addCallback(lambda x, v, s, g: self.lb.virtualservers.update({
-                            "v%ds%dg%d" % (v, s, g): x}), v, s, g)
-        d.addCallback(lambda x: self.lb)
-        return d
+                self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = \
+                    yield self.process_vs(v, s, g)
+        defer.returnValue(self.lb)
 
+    @defer.inlineCallbacks
     def process_vs(self, v, s, g):
         """
         Process data for a given virtual server when no real server is provided
@@ -274,6 +234,23 @@ class AlteonCollector(GenericCollector):
         @param g: group
         @return: a maybe deferred C{IVirtualServer}
         """
+        # Retrieve some data if needed
+        yield self.cache_or_get(
+            ('slbCurCfgVirtServerVname', v),
+            ('slbCurCfgVirtServiceHname', v, s),
+            ('slbCurCfgGroupName', g),
+            ('slbCurCfgVirtServerIpAddress', v),
+            ('slbCurCfgVirtServiceVirtPort', v, s),
+            ('slbCurCfgVirtServiceUDPBalance', v, s),
+            ('slbCurCfgVirtServiceRealPort', v, s),
+            ('slbCurCfgVirtServiceUDPBalance', v, s),
+            ('slbCurCfgGroupMetric', g),
+            ('slbCurCfgVirtServerState', v),
+            ('slbCurCfgGroupHealthCheckLayer', g),
+            ('slbCurCfgGroupBackupServer', g),
+            ('slbCurCfgGroupBackupGroup', g),
+            ('slbCurCfgGroupRealServers', g))
+
         # (v,s,g) is our tuple for a virtual server, let's build it
         index = "v%ds%dg%d" % (v, s, g)
         name = " ~ ".join([x for x in self.cache(
@@ -297,41 +274,31 @@ class AlteonCollector(GenericCollector):
         # Find and attach real servers
         reals = self.cache(('slbCurCfgGroupRealServers', g))
         for r in self.bitmap(reals):
-            rs = self.process_rs(v, s, g, r)
+            rs = yield self.process_rs(v, s, g, r)
             vs.realservers["r%d" % r] = rs
 
             # Maybe a backup server?
-            backup = self.cache(('slbCurCfgRealServerBackUp', r))
+            backup = yield self.cache_or_get(('slbCurCfgRealServerBackUp', r))
             if backup:
-                rs = self.process_rs(v, s, g, backup, True)
+                rs = yield self.process_rs(v, s, g, backup, True)
                 vs.realservers["b%d" % backup] = rs
 
         # Attach backup servers
         backup = self.cache(('slbCurCfgGroupBackupServer', g))
         if backup:
-            rs = self.process_rs(v, s, g, backup, True)
+            rs = yield self.process_rs(v, s, g, backup, True)
             vs.realservers["b%d" % backup] = rs
         backup = self.cache(('slbCurCfgGroupBackupGroup', g))
         if backup:
             # We need to retrieve corresponding real servers.
-            d = self.proxy.get((self.oids['slbCurCfgGroupRealServers'], backup))
-            d.addCallback(lambda x: self.process_backupgroup(v, s, g, backup, vs))
-            return d
+            yield self.proxy.get((self.oids['slbCurCfgGroupRealServers'], backup))
+            for r in self.bitmap(self.cache(('slbCurCfgGroupRealServers', backup))):
+                rs = yield self.process_rs(v, s, g, r, True)
+                vs.realservers["b%d" % r] = rs
 
-        return vs
+        defer.returnValue(vs)
 
-    def process_backupgroup(self, v, s, g, backup, vs):
-        """
-        Process a backup group.
-
-        @param backup: backup group
-        @param vs: virtual server to add this backup group to
-        """
-        for r in self.bitmap(self.cache(('slbCurCfgGroupRealServers', backup))):
-            rs = self.process_rs(v, s, g, r, True)
-            vs.realservers["b%d" % r] = rs
-        return vs
-
+    @defer.inlineCallbacks
     def process_rs(self, v, s, g, r, backup=False):
         """
         Process data for a given virtual server and real server.
@@ -342,6 +309,20 @@ class AlteonCollector(GenericCollector):
         @param r: real server
         @param backup: is it a backup server?
         """
+        # Retrieve some data if needed:
+        yield self.cache_or_get(
+            ('slbCurCfgRealServerIpAddr', r),
+            ('slbCurCfgRealServerName', r),
+            ('slbCurCfgVirtServiceRealPort', v, s),
+            ('slbCurCfgVirtServiceUDPBalance', v, s),
+            ('slbCurCfgRealServerWeight', r),
+            ('slbVirtServicesInfoState', v, s, r),
+            ('slbRealServerInfoState', r),
+            ('slbCurCfgRealServerPingInterval', r),
+            ('slbCurCfgRealServerFailRetry', r),
+            ('slbCurCfgRealServerSuccRetry', r))
+
+        # Build the real server
         rip, name, rport = self.cache(
             ('slbCurCfgRealServerIpAddr', r),
             ('slbCurCfgRealServerName', r),
@@ -370,7 +351,7 @@ class AlteonCollector(GenericCollector):
         rs.extra.update({'ping interval': pi,
                          'fail retry': fr,
                          'success retry': sr})
-        return rs
+        defer.returnValue(rs)
 
 class AlteonCollectorFactory:
     implements(ICollectorFactory, IPlugin)

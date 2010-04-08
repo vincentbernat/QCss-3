@@ -21,6 +21,17 @@ test -x /usr/bin/twistd || exit 0
 test -f $configfile || exit 0
 
 version="$(twistd --version | head -1 | awk '{print $NF}')"
+case $(python -c 'import sys ; print "%d.%d" % sys.version_info[:2]') in
+    2.[01234])
+	python=$(which python2.5 2> /dev/null)
+	;;
+    2.*)
+	python=$(which python 2> /dev/null)
+	;;
+esac
+if [ x"$python" = x"" ]; then
+    echo "qcss3: need at least Python 2.5" >&2
+fi
 
 case "$1" in
     start)
@@ -28,7 +39,7 @@ case "$1" in
 	case "$version" in
 	    8.*)
 		start-stop-daemon -c $user -g $group --start \
-		    --quiet --exec /usr/bin/twistd -- \
+		    --quiet --exec $python -- /usr/bin/twistd \
                     --pidfile=$pidfile \
 		    --no_save \
                     --logfile=$logfile \
@@ -36,7 +47,7 @@ case "$1" in
 		;;
 	    *)
 		start-stop-daemon -c $user -g $group --start \
-		    --quiet --exec /usr/bin/twistd -- \
+		    --quiet --exec $python -- /usr/bin/twistd \
                     --pidfile=$pidfile \
 		    --no_save \
                     --logfile=$logfile \

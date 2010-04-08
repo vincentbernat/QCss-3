@@ -6,6 +6,8 @@ methods to be used by more specific collectors. It is not a complete
 collector.
 """
 
+from twisted.internet import defer
+
 from qcss3.collector.datastore import LoadBalancer
 
 class GenericCollector:
@@ -22,11 +24,7 @@ class GenericCollector:
         self.proxy = proxy
         self.lb = LoadBalancer(name, self.kind, description)
 
-    def cache(self, *oids):
-        """
-        Retrieve OID from proxy cache. First member of each provided
-        OID is fetched from OID dictionary.
-        """
+    def _extend_oids(self, *oids):
         newoids = []
         for o in oids:
             if type(o) is not tuple:
@@ -35,8 +33,30 @@ class GenericCollector:
                 no = [self.oids[o[0]]]
                 no.extend(o[1:])
                 newoids.append(tuple(no))
-        newoids = tuple(newoids)
-        return self.proxy.cache(*newoids)
+        return tuple(newoids)
+
+    def iscached(self, *oids):
+        try:
+            self.cache(*oids)
+        except KeyError:
+            return False
+        return True
+
+    @defer.inlineCallbacks
+    def cache_or_get(self, *oids):
+        try:
+            defer.returnValue(self.cache(*oids))
+        except KeyError:
+            yield self.proxy.get(list(self._extend_oids(*oids)))
+            defer.returnValue(self.cache(*oids))
+
+    def cache(self, *oids):
+        """
+        Retrieve OID from proxy cache. First member of each provided
+        OID is fetched from OID dictionary.
+        """
+        oids = self._extend_oids(*oids)
+        return self.proxy.cache(*oids)
 
     def bitmap(self, bitmap):
         for i in range(len(bitmap)):

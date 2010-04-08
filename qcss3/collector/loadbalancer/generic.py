@@ -37,3 +37,13 @@ class GenericCollector:
                 newoids.append(tuple(no))
         newoids = tuple(newoids)
         return self.proxy.cache(*newoids)
+
+    def bitmap(self, bitmap):
+        for i in range(len(bitmap)):
+            if bitmap[i] == '\x00':
+                continue
+            for r in range(8):
+                if not ord(bitmap[i]) & (1 << r):
+                    continue
+                r = 8-r + i*8
+                yield r

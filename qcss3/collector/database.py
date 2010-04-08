@@ -111,6 +111,9 @@ class RealOrSorryServerWriter:
                     "AND deleted='infinity'",
                     {'lb': lb, 'vs': vs, 'rs': rs})
         # Insert new information
+        weight = None
+        if IRealServer.providedBy(self.realserver):
+            weight = self.realserver.weight
         txn.execute("INSERT INTO realserver "
                     "(lb, vs, rs, name, rip, port, protocol, weight, rstate, sorry) "
                     "VALUES "
@@ -121,7 +124,7 @@ class RealOrSorryServerWriter:
                      'rip': self.realserver.rip,
                      'port': self.realserver.rport,
                      'protocol': self.realserver.protocol,
-                     'weight': self.realserver.weight,
+                     'weight':  weight,
                      'rstate': self.realserver.state,
                      'sorry': ISorryServer.providedBy(self.realserver) })
         # Insert extra information

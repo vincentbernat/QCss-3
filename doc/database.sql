@@ -148,12 +148,14 @@ WHERE EXISTS (SELECT 1 FROM realserver
 	      AND name=new.name AND rip=new.rip
 	      AND port=new.port AND protocol=new.protocol
 	      AND weight=new.weight AND rstate=new.rstate
+	      AND sorry=new.sorry
 	      AND deleted=CURRENT_TIMESTAMP::abstime)
 DO INSTEAD UPDATE realserver SET deleted='infinity', updated=CURRENT_TIMESTAMP::abstime
       	      WHERE lb=new.lb AND vs=new.vs AND rs=new.rs
 	      AND name=new.name AND rip=new.rip
 	      AND port=new.port AND protocol=new.protocol
 	      AND weight=new.weight AND rstate=new.rstate
+	      AND sorry=new.sorry
 	      AND deleted=CURRENT_TIMESTAMP::abstime;
 
 CREATE TABLE realserver_extra (

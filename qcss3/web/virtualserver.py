@@ -6,22 +6,22 @@ def aggregate_state(states):
     if not states:
         return "ok"
     state = states[0]
-    for rstate in state[1:]:
+    for rstate in states[1:]:
         if rstate == "ok":
-            if cur == "disabled":
+            if state == "disabled":
                 state = "ok"
                 continue
-            if cur == "down":
+            if state == "down":
                 state = "degraded"
                 continue
             continue
         if rstate == "disabled":
             continue
         if rstate == "down":
-            if cur == "ok":
+            if state == "ok":
                 state = "degraded"
                 continue
-            if cur == "disabled":
+            if state == "disabled":
                 state = "down"
                 continue
             continue

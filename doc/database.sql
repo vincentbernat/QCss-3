@@ -139,7 +139,7 @@ CREATE TABLE realserver (
   updated     abstime	   DEFAULT CURRENT_TIMESTAMP,
   deleted     abstime	   DEFAULT 'infinity',
   PRIMARY KEY (lb, vs, rs, deleted),
-  CONSTRAINT rstate_check CHECK (rstate = 'ok' OR rstate = 'disabled' OR rstate = 'down' OR rstate = 'unknown')
+  CONSTRAINT rstate_check CHECK (rstate = 'up' OR rstate = 'disabled' OR rstate = 'down' OR rstate = 'unknown')
 );
 CREATE INDEX realserver_sorry ON realserver (lb, vs, rs, sorry, deleted);
 CREATE RULE insert_realserver AS ON INSERT TO realserver

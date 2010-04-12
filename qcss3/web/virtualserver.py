@@ -4,12 +4,12 @@ from qcss3.web.refresh import RefreshResource
 
 def aggregate_state(states):
     if not states:
-        return "ok"
+        return "up"
     state = states[0]
     for rstate in states[1:]:
-        if rstate == "ok":
+        if rstate == "up":
             if state == "disabled":
-                state = "ok"
+                state = "up"
                 continue
             if state == "down":
                 state = "degraded"
@@ -18,7 +18,7 @@ def aggregate_state(states):
         if rstate == "disabled":
             continue
         if rstate == "down":
-            if state == "ok":
+            if state == "up":
                 state = "degraded"
                 continue
             if state == "disabled":
@@ -33,14 +33,14 @@ class VirtualServerResource(JsonPage):
     Give the list of virtual servers.
 
     For example::
-       {'v1g2s9': ["ForumsV4","193.252.117.114:80","ok"],
-        'v1g2s10': ["ForumsV4","193.252.117.114:81","ok"],
+       {'v1g2s9': ["ForumsV4","193.252.117.114:80","up"],
+        'v1g2s10': ["ForumsV4","193.252.117.114:81","up"],
         'v2g1s1': ["forum-rec.wanadooportails.com","193.252.111.12:80","degraded"]}
 
     For each virtual server, the first member of the tuple is the name
     of the virtual server, the second is the VIP and the last one is
     one of those values depending on the status of real servers:
-     - ok       (no real server is down, at least one is up)
+     - up       (no real server is down, at least one is up)
      - disabled (all real servers are disabled)
      - down     (no real server is up, at least one is down)
      - degraded (one real server is down, one is up)
@@ -94,7 +94,7 @@ class VirtualServerDetailResource(JsonPage):
 
     For example::
       {"name": "ForumsV4",
-       "state": "ok",
+       "state": "up",
        "protocol": "tcp",
        "mode": "round robin",
        "VIP": " 193.252.117.114:80",

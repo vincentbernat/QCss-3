@@ -261,7 +261,7 @@ class KeepalivedCollector(GenericCollector):
         vs.extra["packet-forwarding method"] = self.methods[
             self.cache(('virtualServerLoadBalancingKind', v))]
         vs.extra["virtual server status"] = self.status[
-            self.cache(('virtualServerStatus', v))] and "ok" or "down"
+            self.cache(('virtualServerStatus', v))] and "up" or "down"
         for key, oid in [
             ('virtual host', 'virtualServerVirtualHost'),
             ('persist timeout', 'virtualServerPersistTimeout'),
@@ -340,7 +340,7 @@ class KeepalivedCollector(GenericCollector):
             if weight == 0:
                 state = 'disabled'
             else:
-                state = self.status[self.cache(('realServerStatus', v, r))] and "ok" or "down"
+                state = self.status[self.cache(('realServerStatus', v, r))] and "up" or "down"
             rs = RealServer(name, rip, rport, protocol, weight, state)
             for key, oid in [
                 ('upper connection limit', 'realServerUpperConnectionLimit'),
@@ -358,7 +358,7 @@ class KeepalivedCollector(GenericCollector):
                 "inhibit"
         else:
             # Sorry server, not much information
-            rs = SorryServer(name, rip, rport, protocol, "ok")
+            rs = SorryServer(name, rip, rport, protocol, "up")
         yield rs
         return
 

@@ -79,7 +79,7 @@ class AlteonCollector(GenericCollector):
         }
     status = {
         1: "disabled",
-        2: "ok",
+        2: "up",
         3: "down",
         4: "disabled",
         }

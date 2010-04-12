@@ -6,8 +6,8 @@ class RealOrSorryServerResource(JsonPage):
     Give the list of real servers or sorry servers
 
     For example::
-       {"r1":["fofo02wb","ok"],
-        "r2":["fofo03wb","ok"],
+       {"r1":["fofo02wb","up"],
+        "r2":["fofo03wb","up"],
         "r3":["fofo04wb","disabled"],
         "r4":["fofo05wb","down"]}
     
@@ -70,7 +70,7 @@ class RealOrSorryServerDetailResource(JsonPage):
         "IP: "172.16.78.164",
         "port": 80,
         "weight": 1,
-        "state": "ok",
+        "state": "up",
         "check": "http",
         "frequency": "3s",
         "retry": 3,

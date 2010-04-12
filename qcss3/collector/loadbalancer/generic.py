@@ -35,19 +35,23 @@ class GenericCollector:
                 newoids.append(tuple(no))
         return tuple(newoids)
 
-    def iscached(self, *oids):
+    def is_cached(self, *oids):
         try:
-            self.cache(*oids)
+            r = self.cache(*oids)
         except KeyError:
             return False
+        if type(r) is list:
+            for k in r:
+                if k is None:
+                    return False
         return True
 
     @defer.deferredGenerator
     def cache_or_get(self, *oids):
-        try:
+        if self.is_cached(*oids):
             yield self.cache(*oids)
             return
-        except KeyError:
+        else:
             g = defer.waitForDeferred(self.proxy.get(list(self._extend_oids(*oids))))
             yield g
             g.getResult()

@@ -378,7 +378,7 @@ Snmp_handle(int operation, netsnmp_session *session, int reqid,
 	    *resultoid = NULL, *tmp;
 	struct ErrorException *e;
 	struct variable_list *vars;
-	int i;
+	int i, nb;
 	long long counter64;
 	SnmpObject *self;
 
@@ -410,16 +410,28 @@ Snmp_handle(int operation, netsnmp_session *session, int reqid,
 	}
 	if ((results = PyDict_New()) == NULL)
 		goto fireexception;
+	nb = 0;
+	for (vars = response->variables; vars; vars = vars->next_variable) nb++;
 	for (vars = response->variables; vars;
 	     vars = vars->next_variable) {
 	/* Let's handle the value */
 		switch (vars->type) {
 		case SNMP_NOSUCHOBJECT:
-			PyErr_SetString(SnmpNoSuchObject, "No such object was found");
-			goto fireexception;
+			if (nb == 1) {
+				PyErr_SetString(SnmpNoSuchObject, "No such object was found");
+				goto fireexception;
+			}
+			Py_INCREF(Py_None);
+			resultvalue = Py_None;
+			break;
 		case SNMP_NOSUCHINSTANCE:
-			PyErr_SetString(SnmpNoSuchInstance, "No such instance exists");
-			goto fireexception;
+			if (nb == 1) {
+				PyErr_SetString(SnmpNoSuchInstance, "No such instance exists");
+				goto fireexception;
+			}
+			Py_INCREF(Py_None);
+			resultvalue = Py_None;
+			break;
 		case SNMP_ENDOFMIBVIEW:
 			if (PyDict_Size(results) == 0) {
 				PyErr_SetString(SnmpEndOfMibView,

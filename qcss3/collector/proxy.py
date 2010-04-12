@@ -105,7 +105,10 @@ class AgentProxy(WalkAgentProxy):
         if len(oid) > 1:
             r = []
             for o in oid:
-                r.append(self._really_cache(o))
+                try:
+                    r.append(self._really_cache(o))
+                except KeyError:
+                    r.append(None)
             return r
         return self._really_cache(oid[0])
 

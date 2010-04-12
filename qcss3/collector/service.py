@@ -98,12 +98,18 @@ class LoadBalancerCollector:
         self.oid = results['.1.3.6.1.2.1.1.2.0']
         return proxy
 
+    @defer.deferredGenerator
     def findCollector(self):
         """Find the plugin that will handle the load balancer"""
-        plugins = [ plugin for plugin
-                    in getPlugins(ICollectorFactory,
-                                  qcss3.collector.loadbalancer)
-                    if plugin.canBuildCollector(self.proxy, self.description, self.oid) ]
+        plugins = []
+        for plugin in getPlugins(ICollectorFactory,
+                                 qcss3.collector.loadbalancer):
+            d = defer.waitForDeferred(defer.maybeDeferred(
+                    plugin.canBuildCollector, self.proxy, self.description, self.oid))
+            yield d
+            d = d.getResult()
+            if d:
+                plugins.append(plugin)
         if len(plugins) == 1:
             print "Using %s to collect data from %s" % (str(plugins[0].__class__),
                                                         self.lb)
@@ -113,12 +119,14 @@ class LoadBalancerCollector:
         else:
             raise NoPlugin, "No plugin available for %s" % self.lb
         self.proxy.version = 2  # Switch to version 2
-        return plugins[0].buildCollector(self.config, self.proxy,
-                                         self.lb, self.description)
+        yield plugins[0].buildCollector(self.config, self.proxy,
+                                        self.lb, self.description)
+        return
 
     def writeData(self, data, vs=None, rs=None):
-        return self.dbpool.runInteraction(IDatabaseWriter(data).write,
-                                          [a for a in [self.lb, vs, rs] if a])
+        if data is not None:
+            return self.dbpool.runInteraction(IDatabaseWriter(data).write,
+                                              [a for a in [self.lb, vs, rs] if a])
 
     def releaseProxy(self):
         """

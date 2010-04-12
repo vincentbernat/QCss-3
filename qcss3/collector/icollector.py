@@ -30,7 +30,7 @@ class ICollectorFactory(Interface):
         @param proxy: proxy to use to determine if this factory is appropriate
         @param description: sysDescr from the equipment
         @param oid: sysObjectOID from the equipment
-        @return: C{True} if we can build a collector
+        @return: C{True} if we can build a collector / may be deferred
         """
 
     def buildCollector(config, proxy, name, description):

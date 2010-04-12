@@ -108,7 +108,10 @@ class RealOrSorryServerDetailResource(JsonPage):
             return None
         for key, value in data:
             if key not in self.results: # Don't overwrite more important values
-                self.results[key] = value
+                try:
+                    self.results[key] = int(value)
+                except ValueError:
+                    self.results[key] = value
         return self.results
 
     def data_json(self, ctx, data):

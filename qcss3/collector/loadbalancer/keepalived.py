@@ -85,8 +85,8 @@ class KeepalivedCollector(GenericCollector):
         3: "group"
         }
     protocols = {
-        1: "tcp",
-        2: "udp"
+        1: "TCP",
+        2: "UDP"
         }
     modes = {
         1: 'rr',

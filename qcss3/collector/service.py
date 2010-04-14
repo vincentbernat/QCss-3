@@ -17,7 +17,7 @@ class CollectorService(service.Service):
     """Service to collect data from SNMP"""
 
     def __init__(self, config, dbpool):
-        self.config = config.get('collector', {})
+        self.config = config
         self.dbpool = dbpool
         self.setName("SNMP collector")
         AgentProxy.use_getbulk = self.config.get("bulk", True)

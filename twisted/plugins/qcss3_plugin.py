@@ -13,8 +13,6 @@ else:
         longdesc = "Make a QCss3 server."
         optParameters = [
             ['config', 'c', '/etc/qcss3/qcss3.cfg'],
-            ['port', 'p', 8089],
-            ['interface', 'i', '127.0.0.1'],
             ]
 
     class QCssServiceMaker(object):

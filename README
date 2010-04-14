@@ -44,9 +44,6 @@ You can launch the application by hand
 or
  twistd -no qcss3 --config=/etc/qcss3/qcss3.cfg
 
-By default, QCss3 only listens on localhost. You can change this using:
- twistd -no qcss3 --interface=0.0.0.0
-
 License
 -------
 

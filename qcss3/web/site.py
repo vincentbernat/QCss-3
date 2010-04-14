@@ -13,7 +13,7 @@ class MainPage(rend.Page):
     docFactory = loaders.stan(T.html [ T.body [ T.p [ "Nothing here" ] ] ])
 
     def __init__(self, config, dbpool, collector):
-        self.config = config.get('web', {})
+        self.config = config
         self.dbpool = dbpool
         self.collector = collector
         rend.Page.__init__(self)

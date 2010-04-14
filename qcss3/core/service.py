@@ -10,7 +10,7 @@ from nevow import appserver
 
 from qcss3.core.database import Database
 from qcss3.collector.service import CollectorService
-from qcss3.web.site import MainPage
+from qcss3.web.web import WebMainPage, MetaWebMainPage
 
 def makeService(config):
     configfile = yaml.load(file(config['config'], 'rb').read())
@@ -36,11 +36,20 @@ def makeService(config):
         webconfig = configfile.get('web', {})
         if webconfig.get('enabled', True):
             web = internet.TCPServer(webconfig.get('port', 8089),
-                                     appserver.NevowSite(MainPage(webconfig,
-                                                                  dbpool,
-                                                                  collector)),
+                                     appserver.NevowSite(WebMainPage(webconfig,
+                                                                     dbpool,
+                                                                     collector)),
                                      interface=webconfig.get('interface', '127.0.0.1'))
             web.setServiceParent(application)
+
+    # meta web service
+    metaweb = None
+    metawebconfig = configfile.get('metaweb', {})
+    if metawebconfig:
+        metaweb = internet.TCPServer(metawebconfig.get('port', 8090),
+                                     appserver.NevowSite(MetaWebMainPage(metawebconfig)),
+                                     interface=metawebconfig.get('interface', '127.0.0.1'))
+        metaweb.setServiceParent(application)
 
     if dbpool is None:
         reactor.callLater(0, log.msg, "Database has been disabled.")
@@ -48,5 +57,7 @@ def makeService(config):
         reactor.callLater(0, log.msg, "Collector has been disabled.")
     if web is None:
         reactor.callLater(0, log.msg, "Web service has been disabled.")
+    if metaweb is None:
+        reactor.callLater(0, log.msg, "MetaWeb service has been disabled.")
 
     return application

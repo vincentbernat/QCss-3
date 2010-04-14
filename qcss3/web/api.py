@@ -16,16 +16,15 @@ class ApiResource(rend.Page):
     docFactory = loaders.stan(T.html [ T.body [ T.p [ "Valid versions are:" ],
                                    T.ul [ [ T.li[v] for v in versions ] ] ] ])
 
-    def __init__(self, config, dbpool, collector):
-        self.config = config
-        self.dbpool = dbpool
-        self.collector = collector
+    def __init__(self, api, *args):
+        self.api = api
+        self.params = args
         rend.Page.__init__(self)
 
     def childFactory(self, ctx, version):
         if version in ApiResource.versions:
             ctx.remember(version, IApiVersion)
-            return ApiVersionedResource(self.config, self.dbpool, self.collector)
+            return self.api(*self.params)
         return None
 
 class ApiVersionedResource(rend.Page):

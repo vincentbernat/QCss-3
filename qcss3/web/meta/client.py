@@ -45,7 +45,7 @@ class MetaClient(object):
         self.services = config.get('proxy', [])
         self.timeout = config.get('timeout', 2)    # Timeout for requests that should happen fast
         self.parallel = config.get('parallel', 10) # Number of parallel requests allowed
-        self.expire = config.get('expire', 60)     # The list of load balancers expire
+        self.expire = config.get('expire', 30)     # The list of load balancers expire
                                                    # after X seconds
 
         self.loadbalancers = {} # Mapping between load balancers and services
@@ -87,6 +87,10 @@ class MetaClient(object):
         """
         Refresh (if needed) the list of handled load balancers.
 
+        If a list of load balancers is already available, just trigger
+        the refresh and return immediatly. We return a deferred only
+        if the list is not available or is too old.
+
         This list is a mapping from load balancers to a list of
         servers that can handle this load balancer.
         """
@@ -99,10 +103,10 @@ class MetaClient(object):
                 log.msg("service %s responded error %s" % (service, status))
                 return
             for lb in lbs:
-                if lb in self.loadbalancers:
-                    self.loadbalancers[lb].append(service)
+                if lb in self.newloadbalancers:
+                    self.newloadbalancers[lb].append(service)
                 else:
-                    self.loadbalancers[lb] = [service]
+                    self.newloadbalancers[lb] = [service]
             self.updated = time.time()
 
         def doWork(services):
@@ -115,14 +119,20 @@ class MetaClient(object):
                 d.addCallback(lambda x, service: add(service, x), service)
                 yield d
 
+        def finish():
+            self.loadbalancers = self.newloadbalancers
+            self.refreshing = None
+
         # Do we need to update?
         if self.refreshing:
+            if self.loadbalancers:
+                return
             return self.refreshing
         if time.time() - self.updated < self.expire:
             return
 
         # Start update
-        self.loadbalancers = {}
+        self.newloadbalancers = {}
         dl = []
         coop = task.Cooperator()
         work = doWork(self.services)
@@ -130,8 +140,10 @@ class MetaClient(object):
             d = coop.coiterate(work)
             dl.append(d)
         self.refreshing = defer.DeferredList(dl)
-        self.refreshing.addBoth(lambda x: setattr(self, "refreshing", None))
-        return self.refreshing
+        self.refreshing.addBoth(lambda x: finish())
+        if not self.loadbalancers:
+            log.msg("No load balancer list available. Wait to get one.")
+            return self.refreshing
 
     def get_loadbalancers(self):
         """

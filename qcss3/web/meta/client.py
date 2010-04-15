@@ -48,16 +48,19 @@ class MetaClient(object):
         self.expire = config.get('expire', 30)     # The list of load balancers expire
                                                    # after X seconds
 
+        # The following dict are all indexed by a date
         self.loadbalancers = {} # Mapping between load balancers and services
-        self.updated = 0        # Last time updated
-        self.refreshing = None
+        self.newloadbalancers = {}
+        self.updated = {}       # Last time updated
+        self.refreshing = {}
 
-    def get(self, service, timeout, *requests):
+    def get(self, service, timeout, date, *requests):
         """
         Request a page from a remote service.
 
         @param service: URL of remote service to use
         @param timeout: timeout to use (0 to disable)
+        @param date: date of request (None if no date)
         @param request: request to issue (without prefix /api/1.0/ and without suffix /)
         @return: a tuple containing the deserialized data and the status code
 
@@ -71,6 +74,8 @@ class MetaClient(object):
                 return (d, status)
             raise ClientNotJson(data, status, headers)
 
+        if date is not None:
+            requests = ["past", date] + list(requests)
         fact = twclient._makeGetterFactory(
             '%s/api/1.0/%s/' % (service,
                                 "/".join([urllib.quote(r, '') for r in requests])),
@@ -83,7 +88,7 @@ class MetaClient(object):
                                                        fact.response_headers))
         return fact.deferred
 
-    def refresh(self):
+    def refresh(self, date):
         """
         Refresh (if needed) the list of handled load balancers.
 
@@ -93,9 +98,11 @@ class MetaClient(object):
 
         This list is a mapping from load balancers to a list of
         servers that can handle this load balancer.
+
+        @param date: date to use for refresh
         """
 
-        def add(service, data):
+        def add(service, date, data):
             if not data:
                 return
             lbs, status = data
@@ -103,53 +110,63 @@ class MetaClient(object):
                 log.msg("service %s responded error %s" % (service, status))
                 return
             for lb in lbs:
-                if lb in self.newloadbalancers:
-                    self.newloadbalancers[lb].append(service)
+                if lb in self.newloadbalancers[date]:
+                    self.newloadbalancers[date][lb].append(service)
                 else:
-                    self.newloadbalancers[lb] = [service]
-            self.updated = time.time()
+                    self.newloadbalancers[date][lb] = [service]
+            self.updated[date] = time.time()
 
-        def doWork(services):
+        def doWork(services, date):
             for service in services:
-                d = self.get(service, self.timeout, "loadbalancer")
+                d = self.get(service, self.timeout, date, "loadbalancer")
                 d.addErrback(lambda x, service:
                                  log.msg("service %s is unavailable (%s)" % (service,
                                                                              x.value)),
                              service)
-                d.addCallback(lambda x, service: add(service, x), service)
+                d.addCallback(lambda x, service: add(service, date, x), service)
                 yield d
 
         def finish():
-            self.loadbalancers = self.newloadbalancers
-            self.refreshing = None
+            self.loadbalancers[date] = self.newloadbalancers[date]
+            del self.refreshing[date]
+            del self.newloadbalancers[date]
+            # Expire some stuff
+            t = time.time()
+            delete = [d for d in self.updated
+                      if d is not None and t - self.updated[d] > 4*self.expire]
+            for d in delete:
+                del self.updated[d]
+                del self.loadbalancers[d]
 
         # Do we need to update?
-        if self.refreshing:
-            if self.loadbalancers:
+        if date in self.refreshing:
+            if date in self.loadbalancers:
                 return
-            return self.refreshing
-        if time.time() - self.updated < self.expire:
+            return self.refreshing[date]
+        if time.time() - self.updated.get(date, 0) < self.expire:
             return
 
         # Start update
-        self.newloadbalancers = {}
+        self.newloadbalancers[date] = {}
         dl = []
         coop = task.Cooperator()
-        work = doWork(self.services)
+        work = doWork(self.services, date)
         for i in xrange(self.parallel):
             d = coop.coiterate(work)
             dl.append(d)
-        self.refreshing = defer.DeferredList(dl)
-        self.refreshing.addBoth(lambda x: finish())
-        if not self.loadbalancers:
+        self.refreshing[date] = defer.DeferredList(dl)
+        self.refreshing[date].addBoth(lambda x: finish())
+        if not date in self.loadbalancers:
             log.msg("No load balancer list available. Wait to get one.")
-            return self.refreshing
+            return self.refreshing[date]
 
-    def get_loadbalancers(self):
+    def get_loadbalancers(self, date):
         """
         Return a fresh list of load balancers that we are able to handle.
+
+        @param date: date to use to retrieve load balancers
         """
-        d = defer.maybeDeferred(self.refresh)
-        d.addCallback(lambda x: self.loadbalancers.keys())
+        d = defer.maybeDeferred(self.refresh, date)
+        d.addCallback(lambda x: self.loadbalancers[date].keys())
         return d
 

@@ -1,3 +1,4 @@
+from qcss3.web.timetravel import IPastDate
 from qcss3.web.json import JsonPage
 
 class MetaLoadBalancerResource(JsonPage):
@@ -10,4 +11,8 @@ class MetaLoadBalancerResource(JsonPage):
         JsonPage.__init__(self)
 
     def data_json(self, ctx, data):
-        return self.client.get_loadbalancers()
+        try:
+            date = ctx.locate(IPastDate)
+        except:
+            date = None
+        return self.client.get_loadbalancers(date)

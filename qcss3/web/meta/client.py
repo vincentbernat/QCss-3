@@ -7,26 +7,31 @@ from twisted.python import log
 from twisted.web import client as twclient
 from twisted.web.http_headers import Headers
 
-from nevow import json
+from nevow import json, inevow, rend
+
+from qcss3.web.timetravel import IPastDate
 
 class ClientError(Exception):
     pass
 
-class ClientNotJson(ClientError):
+class MetaHTTPPageGetter(twclient.HTTPPageGetter):
     """
-    Service returned not JSon data
-    """
-    def __init__(self, data, status, headers):
-        self.data = data
-        self.status = status
-        self.headers = headers
+    Page getter protocol.
 
-    def __str__(self):
-        if "content-type" not in self.headers:
-            return "Server returned not JSON data with code %s" % self.status
-        return "Server returned %s instead of JSON with code %s" % (
-            self.headers['content-type'].split(";")[1],
-            self.status)
+    Unlike the original page getter, this one does not raise
+    exceptions when getting values like 404. Exceptions are raisen on
+    network errors (connect timeout, connection refused) or on error
+    500.
+    """
+    def handleStatusDefault(self):
+        pass
+    def handleStatus_500(self):
+        self.failed = 1
+    def handleStatus_200(self):
+        self.status = "200"
+
+class MetaHTTPClientFactory(twclient.HTTPClientFactory):
+    protocol = MetaHTTPPageGetter
 
 class MetaClient(object):
     """
@@ -62,30 +67,20 @@ class MetaClient(object):
         @param timeout: timeout to use (0 to disable)
         @param date: date of request (None if no date)
         @param request: request to issue (without prefix /api/1.0/ and without suffix /)
-        @return: a tuple containing the deserialized data and the status code
-
-        In case the data received is not JSon, the data is returned as an exception.
+        @return: a tuple containing the data, the status code and the content-type
         """
-
-        def process(data, status, headers):
-            if "content-type" in headers and \
-                    headers["content-type"][0].startswith("application/json;"):
-                d = json.parse(data)
-                return (d, status)
-            raise ClientNotJson(data, status, headers)
-
         if date is not None:
             requests = ["past", date] + list(requests)
         fact = twclient._makeGetterFactory(
             '%s/api/1.0/%s/' % (service,
                                 "/".join([urllib.quote(r, '') for r in requests])),
-            twclient.HTTPClientFactory,
+            MetaHTTPClientFactory,
             timeout=self.timeout,
             agent='QCss3 MetaWeb client on %s' % os.uname()[1])
 
-        fact.deferred.addCallback(lambda data: process(data,
-                                                       fact.status,
-                                                       fact.response_headers))
+        fact.deferred.addCallback(lambda data: 
+                                  (data, int(fact.status),
+                                   "".join(fact.response_headers["content-type"])))
         return fact.deferred
 
     def refresh(self, date):
@@ -103,12 +98,14 @@ class MetaClient(object):
         """
 
         def add(service, date, data):
-            if not data:
-                return
-            lbs, status = data
-            if status != "200":
+            lbs, status, content = data
+            if status != 200:
                 log.msg("service %s responded error %s" % (service, status))
                 return
+            if not content.startswith("application/json;"):
+                log.msg("service %s did not answer with JSON (%s)" % content)
+                return
+            lbs = json.parse(lbs)
             for lb in lbs:
                 if lb in self.newloadbalancers[date]:
                     self.newloadbalancers[date][lb].append(service)
@@ -119,11 +116,12 @@ class MetaClient(object):
         def doWork(services, date):
             for service in services:
                 d = self.get(service, self.timeout, date, "loadbalancer")
-                d.addErrback(lambda x, service:
-                                 log.msg("service %s is unavailable (%s)" % (service,
-                                                                             x.value)),
-                             service)
-                d.addCallback(lambda x, service: add(service, date, x), service)
+                d.addCallbacks(lambda x, service: add(service, date, x),
+                               lambda x, service:
+                                   log.msg("service %s is unavailable (%s)" % (service,
+                                                                               x.value)),
+                               callbackArgs=(service,),
+                               errbackArgs=(service,))
                 yield d
 
         def finish():
@@ -170,3 +168,71 @@ class MetaClient(object):
         d.addCallback(lambda x: self.loadbalancers[date].keys())
         return d
 
+
+class ProxyResource(rend.Page):
+    """
+    Special resource acting like a proxy.
+    """
+
+    def __init__(self, lb, client):
+        self.lb = lb
+        self.client = client
+        self.segments = ()
+        rend.Page.__init__(self)
+
+    def locateChild(self, ctx, segments):
+        # Eeat all remaining segments
+        self.segments = segments
+        return self, ()
+
+    def renderHTTP(self, ctx):
+        """
+        Proxy a request.
+
+        The request (contained in ctx) is proxied using the service
+        for lb.
+
+        @param ctx: context of the request
+        """
+
+        def cycle(services=None):
+            if services is None:
+                if self.lb not in self.client.loadbalancers[date]:
+                    return None
+                services = self.client.loadbalancers[date][self.lb][:]
+            if not services:
+                return nogateway()
+
+            d = defer.succeed(None)
+            d.addCallback(lambda x: self.client.get(services[0], 0,
+                                                    date, "loadbalancer",
+                                                    self.lb, *segments))
+            d.addCallbacks(lambda x: process(x, services[0]),
+                           lambda x: error(x, services))
+            return d
+
+        def error(x, services):
+            log.msg("while querying %s, get error %s" % (services[0], x.value))
+            return cycle(services[1:])
+
+        def process(x, service):
+            # Copy verbatim
+            data, status, content = x
+            request.setResponseCode(int(status))
+            request.setHeader("Content-Type", content)
+            request.setHeader("X-QCss-Server", service)
+            return data
+
+        def nogateway(x):
+            request.setResponseCode(504) # Gateway timeout
+            return "No gateway available"
+
+        try:
+            date = ctx.locate(IPastDate)
+        except KeyError:
+            date = None
+        request = inevow.IRequest(ctx)
+        segments = [x for x in self.segments if x]
+        d = defer.maybeDeferred(self.client.refresh, date)
+        d.addCallback(lambda x: cycle())
+        return d

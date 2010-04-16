@@ -6,7 +6,6 @@ import copy
 from twisted.internet import defer, task, reactor
 from twisted.python import log
 from twisted.web import client as twclient
-from twisted.web.http_headers import Headers
 
 from nevow import json, inevow, rend
 

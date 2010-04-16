@@ -181,8 +181,7 @@ class KeepalivedCollector(GenericCollector):
         if virttype == "fwmark":
             # We have a firewall mark.
             name = "fwmark %d" % self.cache(('virtualServerFwMark', v))
-            vip = "mark%d:%d" % tuple(self.cache(('virtualServerFwMark', v),
-                                                 ('virtualServerPort', v)))
+            vip = "mark%d:0" % self.cache(('virtualServerFwMark', v))
         elif virttype == "ip":
             # We have an IP address. We only support IPv4.
             if self.cache(('virtualServerAddrType', v)) != 1:

@@ -27,6 +27,12 @@ class MetaHTTPPageGetter(twclient.HTTPPageGetter):
         pass
     def handleStatus_500(self):
         self.failed = 1
+    def handleStatus_502(self):
+        self.failed = 1
+    def handleStatus_503(self):
+        self.failed = 1
+    def handleStatus_504(self):
+        self.failed = 1
     def handleStatus_200(self):
         self.status = "200"
 

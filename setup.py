@@ -31,6 +31,7 @@ if __name__ == "__main__":
                     "qcss3.collector.loadbalancer",
                     "qcss3.core",
                     "qcss3.web",
+                    "qcss3.web.meta",
                     "twisted.plugins"],
           package_data={'twisted': ['plugins/qcss3_plugin.py']}
           )

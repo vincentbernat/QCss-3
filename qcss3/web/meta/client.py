@@ -1,6 +1,7 @@
 import time
 import urllib
 import os
+import copy
 
 from twisted.internet import defer, task, reactor
 from twisted.python import log
@@ -82,6 +83,64 @@ class MetaClient(object):
                                   (data, int(fact.status),
                                    "".join(fact.response_headers["content-type"])))
         return fact.deferred
+
+    def get_all(self, date, *requests):
+        """
+        Request a page from all remote services. In parallel. JSON only.
+
+        We try to be clever: we just want to cover all load
+        balancers. Therefore, we take the set of the first remote
+        service for each load balancer and we query this set. If
+        something fails, we can add another remote service to this
+        set.
+
+        @param date: if not C{None}, try in the past
+        @param requests: request to issue
+        @return: list of data
+        """
+
+        def process(x, service):
+            data, status, content = x
+            if status != 200:
+                log.msg("got status code %d when querying service %s for request %r",
+                        status, service, requests)
+                return
+            if not content.startswith("application/json;"):
+                log.msg("got content type %r when querying service %s for request %r",
+                        content, service, requests)
+                return
+            results.append(json.parse(data))
+
+        def doWork():
+            # Iterate on the list of services we need to query
+            services = []
+            lbs = copy.deepcopy(self.loadbalancers[date])
+            for lb in lbs:
+                found = False
+                for service in services:
+                    if service in lbs[lb]:
+                        found = True
+                if not found:
+                    service = lbs[lb][0]
+                    services.append(service)
+                    d = self.get(service, 0, date, *requests)
+                    d.addCallback(lambda x, service: process(x, service), service)
+                    yield d
+
+        def query():
+            dl = []
+            coop = task.Cooperator()
+            work = doWork()
+            for i in xrange(self.parallel):
+                d = coop.coiterate(work)
+                dl.append(d)
+            return defer.DeferredList(dl)
+
+        results = []
+        d = defer.maybeDeferred(self.refresh, date)
+        d.addCallback(lambda x: query())
+        d.addCallback(lambda x: results)
+        return d
 
     def refresh(self, date):
         """

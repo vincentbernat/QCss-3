@@ -4,6 +4,7 @@ from qcss3.web.timetravel import IPastDate
 from qcss3.web.meta.client import MetaClient
 from qcss3.web.meta.past import MetaPastResource
 from qcss3.web.meta.loadbalancer import MetaLoadBalancerResource
+from qcss3.web.meta.search import MetaSearchResource
 
 class MetaApiResource(rend.Page):
     """
@@ -29,3 +30,6 @@ class MetaApiResource(rend.Page):
 
     def child_loadbalancer(self, ctx):
         return MetaLoadBalancerResource(self.client)
+
+    def child_search(self, ctx):
+        return MetaSearchResource(self.client)

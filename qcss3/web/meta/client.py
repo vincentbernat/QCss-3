@@ -75,19 +75,28 @@ class MetaClient(object):
         @param request: request to issue (without prefix /api/1.0/ and without suffix /)
         @return: a tuple containing the data, the status code and the content-type
         """
+
+        def getPage(url):
+            # Small reimplementation of twisted.web.client.getPage
+            scheme, host, port, path = twclient._parse(url)
+            factory = MetaHTTPClientFactory(url, timeout=self.timeout,
+                                            agent='QCss3 MetaWeb client on %s' % os.uname()[1])
+            if scheme == 'https':
+                from twisted.internet import ssl
+                contextFactory = ssl.ClientContextFactory()
+                reactor.connectSSL(host, port, factory, contextFactory, timeout=self.timeout)
+            else:
+                reactor.connectTCP(host, port, factory, timeout=self.timeout)
+            factory.deferred.addCallback(lambda data:
+                                             (data, int(factory.status),
+                                              "".join(factory.response_headers["content-type"])))
+            return factory.deferred
+
         if date is not None:
             requests = ["past", date] + list(requests)
-        fact = twclient._makeGetterFactory(
-            '%s/api/1.0/%s/' % (service,
-                                "/".join([urllib.quote(r, '') for r in requests])),
-            MetaHTTPClientFactory,
-            timeout=self.timeout,
-            agent='QCss3 MetaWeb client on %s' % os.uname()[1])
-
-        fact.deferred.addCallback(lambda data: 
-                                  (data, int(fact.status),
-                                   "".join(fact.response_headers["content-type"])))
-        return fact.deferred
+        url = '%s/api/1.0/%s/' % (service,
+                                  "/".join([urllib.quote(r, '') for r in requests]))
+        return getPage(url)
 
     def get_all(self, date, *requests):
         """

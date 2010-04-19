@@ -116,30 +116,90 @@ class MetaClient(object):
         def process(x, service):
             data, status, content = x
             if status != 200:
-                log.msg("got status code %d when querying service %s for request %r",
-                        status, service, requests)
+                log.msg(
+                    "got status code %d when querying service %s for request %r" %
+                    (status, service, requests))
                 return
             if not content.startswith("application/json;"):
-                log.msg("got content type %r when querying service %s for request %r",
-                        content, service, requests)
+                log.msg("got content type %r when querying service %s for request %r" %
+                        (content, service, requests))
                 return
             results.append(json.parse(data))
 
         def doWork():
-            # Iterate on the list of services we need to query
-            services = []
             lbs = copy.deepcopy(self.loadbalancers[date])
+            # Iterate on the list of services we need to query
+            services = []       # list of currently running services
+            failedservices = [] # list of failed services
+            schedule(lbs, services, failedservices)
+            for service in services[:]:
+                d = queryService(service, services, failedservices, lbs)
+                yield d
+
+        def queryService(service, services, failedservices, lbs):
+            d = self.get(service, 0, date, *requests)
+            d.addCallbacks(lambda x, service: process(x, service),
+                           lambda x, service: reschedule(service,
+                                                         services, failedservices,
+                                                         lbs),
+                           callbackArgs=(service,),
+                           errbackArgs=(service,))
+            return d
+
+        def schedule(lbs, services, failedservices):
+            """
+            Schedula additional services to cover the list of lbs.
+
+            @param lbs: list of load balancer to cover
+               (as a mapping lb->service)
+            @param services: services already scheduled (will be
+               modified by additional services to be queried)
+            @param failedservices: services that should not be scheduled
+            @return: list of new services to schedule
+            """
+            newservices = []
+            # For each LB, check if it is currently covered
             for lb in lbs:
                 found = False
                 for service in services:
                     if service in lbs[lb]:
                         found = True
                 if not found:
-                    service = lbs[lb][0]
-                    services.append(service)
-                    d = self.get(service, 0, date, *requests)
-                    d.addCallback(lambda x, service: process(x, service), service)
-                    yield d
+                    # This LB is not covered, try to add the first non
+                    # failed service to our list of services to query.
+                    for service in lbs[lb]:
+                        if service not in failedservices:
+                            services.append(service)
+                            newservices.append(service)
+                            break
+                    # Here, we have a load balancer not covered
+                    # anymore, maybe we should raise an exception.
+                    log.msg("No service available for load balancer %r" % lb)
+            return newservices
+
+        def reschedule(service, services, failedservices, lbs):
+            # Reschedule a failed service
+            if service not in services:
+                # The service is already removed, no worry but emit a warning
+                log.msg("Service %r failed, cannot reschedule" % service)
+                return
+            # Remove all occurences of the failed service
+            while True:
+                try:
+                    services.remove(service)
+                except ValueError:
+                    break
+            failedservices.append(service)
+            # Try a new service to replace it
+            newservices = schedule(lbs, services, failedservices)
+            newservices = [queryService(s, services, failedservices, lbs)
+                           for s in newservices]
+            if newservices:
+                log.msg("Reschedule %r to other available services" % service)
+            else:
+                log.msg("Unable to reschedule %r, no other services available" %
+                        service)
+            return defer.DeferredList(newservices)
 
         def query():
             dl = []

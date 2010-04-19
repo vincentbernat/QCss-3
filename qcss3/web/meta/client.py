@@ -356,7 +356,7 @@ class ProxyResource(rend.Page):
             request.setHeader("X-QCss-Server", service)
             return data
 
-        def nogateway(x):
+        def nogateway():
             request.setResponseCode(504) # Gateway timeout
             return "No gateway available"
 

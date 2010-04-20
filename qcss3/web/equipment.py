@@ -1,6 +1,6 @@
 from qcss3.web.json import JsonPage
 from qcss3.web.virtualserver import VirtualServerResource
-from qcss3.web.refresh import RefreshResource
+from qcss3.web.refresh import RefreshResource, RefreshMixIn
 
 class LoadBalancerResource(JsonPage):
     """
@@ -28,7 +28,7 @@ class LoadBalancerResource(JsonPage):
     def childFactory(self, ctx, name):
         return LoadBalancerDetailResource(name, self.dbpool, self.collector)
 
-class LoadBalancerDetailResource(JsonPage):
+class LoadBalancerDetailResource(JsonPage, RefreshMixIn):
     """
     Return details about a load balancer.
 
@@ -39,11 +39,12 @@ class LoadBalancerDetailResource(JsonPage):
     """
 
     def __init__(self, name, dbpool, collector):
-        self.name = name
+        self.lb = name
         self.dbpool = dbpool
         self.collector = collector
         JsonPage.__init__(self)
 
+    @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT name, description, type
@@ -51,7 +52,7 @@ FROM loadbalancer
 WHERE name=%(name)s
 AND deleted='infinity'
 """,
-                                       {'name': self.name})
+                                       {'name': self.lb})
         d.addCallback(self.format_json)
         return d
 
@@ -64,10 +65,10 @@ AND deleted='infinity'
                 'type': data[0][2]}
 
     def child_virtualserver(self, ctx):
-        return VirtualServerResource(self.name,
+        return VirtualServerResource(self.lb,
                                      self.dbpool,
                                      self.collector)
 
     def child_refresh(self, ctx):
         return RefreshResource(self.dbpool, self.collector,
-                               self.name)
+                               self.lb)

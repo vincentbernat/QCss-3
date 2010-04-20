@@ -1,7 +1,7 @@
 from qcss3.web.json import JsonPage
-from qcss3.web.refresh import RefreshResource
+from qcss3.web.refresh import RefreshResource, RefreshMixIn
 
-class RealOrSorryServerResource(JsonPage):
+class RealOrSorryServerResource(JsonPage, RefreshMixIn):
     """
     Give the list of real servers or sorry servers
 
@@ -27,6 +27,7 @@ class RealOrSorryServerResource(JsonPage):
             raise NotImplementedError
         JsonPage.__init__(self)
 
+    @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT rs.rs, rs.name, rs.rstate
@@ -61,7 +62,7 @@ class SorryServerResource(RealOrSorryServerResource):
         return SorryServerDetailResource(self.lb, self.vs, name,
                                          self.dbpool, self.collector)
 
-class RealOrSorryServerDetailResource(JsonPage):
+class RealOrSorryServerDetailResource(JsonPage, RefreshMixIn):
     """
     Give the details about a real server.
 
@@ -114,6 +115,7 @@ class RealOrSorryServerDetailResource(JsonPage):
                     self.results[key] = value
         return self.results
 
+    @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT rs.name, rs.rip, rs.port, rs.protocol, rs.weight, rs.rstate

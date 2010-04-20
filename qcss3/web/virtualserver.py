@@ -1,6 +1,6 @@
 from qcss3.web.json import JsonPage
 from qcss3.web.realserver import RealServerResource, SorryServerResource
-from qcss3.web.refresh import RefreshResource
+from qcss3.web.refresh import RefreshResource, RefreshMixIn
 
 def aggregate_state(states):
     if not states:
@@ -28,7 +28,7 @@ def aggregate_state(states):
     return state
 
 
-class VirtualServerResource(JsonPage):
+class VirtualServerResource(JsonPage, RefreshMixIn):
     """
     Give the list of virtual servers.
 
@@ -56,6 +56,7 @@ class VirtualServerResource(JsonPage):
         self.collector = collector
         JsonPage.__init__(self)
 
+    @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT vs.vs, vs.name, vs.vip, rs.rstate
@@ -88,7 +89,7 @@ AND rs.deleted = 'infinity'
                                            self.dbpool,
                                            self.collector)
 
-class VirtualServerDetailResource(JsonPage):
+class VirtualServerDetailResource(JsonPage, RefreshMixIn):
     """
     Give details about a virtual server.
 
@@ -137,6 +138,7 @@ class VirtualServerDetailResource(JsonPage):
                     self.results[key] = value
         return self.results
 
+    @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT vs.name, vs.vip, vs.protocol, vs.mode

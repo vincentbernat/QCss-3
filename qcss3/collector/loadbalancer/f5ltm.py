@@ -18,7 +18,7 @@ from zope.interface import implements
 
 from qcss3.collector.icollector import ICollector, ICollectorFactory
 from qcss3.collector.datastore import LoadBalancer, VirtualServer, RealServer, SorryServer
-from generic import GenericCollector
+from qcss3.collector.loadbalancer.generic import GenericCollector, str2oid, oid2str
 
 class F5LTMCollector(GenericCollector):
     """
@@ -128,7 +128,7 @@ class F5LTMCollector(GenericCollector):
 
         # For each virtual server, build it
         for v in self.cache('ltmVirtualServAddrType'):
-            v = "".join([chr(int(a)) for a in v[1:]])
+            v = oid2str(v)
             vs = defer.waitForDeferred(self.process_vs(v))
             yield vs
             vs = vs.getResult()
@@ -145,8 +145,7 @@ class F5LTMCollector(GenericCollector):
         @param v: virtual server
         @return: a maybe deferred C{IVirtualServer}
         """
-        ov = ".".join([str(ord(a)) for a in v])
-        ov = "%d.%s" % (len(v), ov)
+        ov = str2oid(v)
         # Retrieve some data if needed
         oids = []
         for o in self.oids:
@@ -166,8 +165,7 @@ class F5LTMCollector(GenericCollector):
 
         # Get pool
         p = self.cache(('ltmVirtualServDefaultPool', ov))
-        op = ".".join([str(ord(a)) for a in p])
-        op = "%d.%s" % (len(p), op)
+        op = str2oid(p)
         oids = []
         for o in self.oids:
             if o.startswith("ltmPool") and not o.startswith("ltmPoolMbr") and \
@@ -239,42 +237,40 @@ class F5LTMCollector(GenericCollector):
         @param port: port
         """
         # Retrieve some data if needed:
-        ov = ".".join([str(ord(a)) for a in v])
-        ov = "%d.%s" % (len(v), ov)
-        orip = ".".join([str(ord(a)) for a in socket.inet_aton(rip)])
+        ov = str2oid(v)
+        orip = str2oid(socket.inet_aton(rip))
         p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
         yield p
         p = p.getResult()
-        op = ".".join([str(ord(a)) for a in p])
-        op = "%d.%s" % (len(p), op)
+        op = str2oid(p)
         oids = []
         for o in self.oids:
             if o.startswith("ltmPoolMbr") or o.startswith("ltmPoolMember"):
-                oids.append((o, op, 1, 4, orip, port))
+                oids.append((o, op, 1, orip, port))
         oids = tuple(oids)
         c = defer.waitForDeferred(self.cache_or_get(*oids))
         yield c
         c.getResult()
 
         name = defer.waitForDeferred(self.cache_or_get(('ltmNodeAddrScreenName',
-                                                        1, 4, orip)))
+                                                        1, orip)))
         yield name
         name = name.getResult()
         protocol = defer.waitForDeferred(self.get_protocol(ov))
         yield protocol
         protocol = protocol.getResult()
-        weight = self.cache(('ltmPoolMemberWeight', op, 1, 4, orip, port))
-        avail, enabled = self.cache(('ltmPoolMbrStatusAvailState', op, 1, 4, orip, port),
-                                    ('ltmPoolMbrStatusEnabledState', op, 1, 4, orip, port))
+        weight = self.cache(('ltmPoolMemberWeight', op, 1, orip, port))
+        avail, enabled = self.cache(('ltmPoolMbrStatusAvailState', op, 1, orip, port),
+                                    ('ltmPoolMbrStatusEnabledState', op, 1, orip, port))
         if self.enabledstates[enabled] != "enabled":
             state = "suspended"
         else:
             state = self.availstates[avail]
         rs = RealServer(name, rip, port, protocol, weight, state)
         rs.extra["detailed reason"] = self.cache(('ltmPoolMbrStatusDetailReason',
-                                                  op, 1, 4, orip, port))
+                                                  op, 1, orip, port))
         rs.extra["monitor rule"] = self.cache(('ltmPoolMemberMonitorRule',
-                                               op, 1, 4, orip, port))
+                                               op, 1, orip, port))
         yield rs
         return
 
@@ -292,9 +288,8 @@ class F5LTMCollector(GenericCollector):
             yield c
             c.getResult()
         for k in self.cache(('ltmVirtualServProfileType', ov)):
-            protocol = "".join([chr(a) for a in k[1:]])
+            yield oid2str(k)
             break
-        yield protocol
         return
 
 class F5LTMCollectorFactory:

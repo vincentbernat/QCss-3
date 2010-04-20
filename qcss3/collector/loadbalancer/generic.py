@@ -4,11 +4,54 @@ Generic collector.
 This module provides a generic collector which implements some useful
 methods to be used by more specific collectors. It is not a complete
 collector.
+
+There are also two helpers function to convert strings to OID and
+vice-versa.
 """
 
 from twisted.internet import defer
 
 from qcss3.collector.datastore import LoadBalancer
+
+def str2oid(string):
+    """
+    Convert the given string into an OID (as a string)
+
+    It is assumed that the string is a variable-length string and
+    therefore the OID is prefixed by its length.
+
+    @param string: string to convert
+    @return: OID as a string (not a tuple!)
+    """
+    oid = ".".join([str(ord(a)) for a in string])
+    return "%d.%s" % (len(string), oid)
+
+def oid2str(oid):
+    """
+    Convert the given OID (as a list) into a string.
+
+    It is assumed that the string is variable length and therefore the
+    OID is prefixed by the length of the string. If several strings
+    are found into the oid, they are returned as a list of
+    strings. Otherwise, only the string is returned.
+
+    @param oid: OID to convert (as a tuple, not a string!)
+    @return: a string or a list of strings
+    """
+    results = []
+    if not oid:
+        raise ValueError("Cannot convert empty OID")
+    while oid:
+        length = oid[0]
+        if len(oid) - 1 < length:
+            raise ValueError(
+                "Cannot convert OID %r into a string due to incompatible length" % oid)
+        result = "".join([chr(a) for a in oid[1:length+1]])
+        results.append(result)
+        oid = oid[length+1:]
+    if len(results) > 1:
+        return results
+    return results[0]
 
 class GenericCollector:
     """

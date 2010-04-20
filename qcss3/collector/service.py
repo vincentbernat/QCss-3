@@ -56,6 +56,21 @@ class CollectorService(service.Service):
                 # Don't raise an exception if we are refreshing all load balancers
                 d.addErrback(lambda x, lb: log.msg(
                         "Error while exploring %s:\n%s" % (lb, x)), alb)
+        if lb is None:
+            d.addCallback(lambda x: self.expire())
+        return d
+
+    def expire(self):
+        """
+        Expire old load balancers that were not updated after a long time
+        """
+        d = self.dbpool.runOperation("""
+UPDATE loadbalancer
+SET deleted=CURRENT_TIMESTAMP
+WHERE CURRENT_TIMESTAMP - interval '%(expire)s days' > updated
+AND deleted='infinity'
+""",
+                                     {'expire': self.config.get("expire", 1)})
         return d
 
 class LoadBalancerCollector:

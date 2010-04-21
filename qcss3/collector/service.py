@@ -46,6 +46,16 @@ class CollectorService(service.Service):
             if rs is not None and (lb, vs, rs) in self.inprogress:
                 return self.inprogress[lb, vs, rs]
 
+        # Informative message
+        if lb is None:
+            log.msg("Start global refresh")
+        elif vs is None:
+            log.msg("Start refresh of load balancer %r" % lb)
+        elif rs is None:
+            log.msg("Start refresh of virtual server %r for %r" % (vs, lb))
+        else:
+            log.msg("Start refresh of real server %r in %r for %r" % (rs, vs, lb))
+
         if lb is None:
             lbs = self.config.get("lb", {}).keys()
         else:

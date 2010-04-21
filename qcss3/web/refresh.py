@@ -108,7 +108,6 @@ AND deleted='infinity'
         return int(time.time())
 
     def refresh(self, lb=None, vs=None, rs=None):
-        log.msg("Refreshing %r, %r, %r" % (lb, vs, rs))
         start = time.time()
         d = self.collector.refresh(lb, vs, rs)
         d.addCallback(lambda x: "Refreshed in %d second(s)" % int(time.time() - start))

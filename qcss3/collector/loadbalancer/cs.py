@@ -14,7 +14,7 @@ Cisco has changed the base OID from .1.3.6.1.4.1.2467 to
 factory collectors.
 
 An owner and a content is mapped to a virtual server. A service is
-mapped to a real server. We ignore groups. We ignore sorry servers.
+mapped to a real server. We ignore groups.
 """
 
 import re
@@ -107,8 +107,8 @@ class ArrowOrCsCollector(GenericCollector):
             'apCntEnable': '.1.16.4.1.11',
             'apCntPersistence': '.1.16.4.1.15',
             'apCntContentType': '.1.16.4.1.43',
-            # 'apCntPrimarySorryServer': '.1.16.4.1.58',
-            # 'apCntSecondSorryServer': '.1.16.4.1.59',
+            'apCntPrimarySorryServer': '.1.16.4.1.58',
+            'apCntSecondSorryServer': '.1.16.4.1.59',
             # Content/Service association
             'apCntsvcSvcName': '.1.18.2.1.3',
             # Services
@@ -225,7 +225,18 @@ class ArrowOrCsCollector(GenericCollector):
             services.getResult()
         for r in self.cache(('apCntsvcSvcName', oowner, ocontent)):
             service = oid2str(r)
-            rs = defer.waitForDeferred(self.process_rs(owner, content, service))
+            rs = defer.waitForDeferred(self.process_rs(service))
+            yield rs
+            rs = rs.getResult()
+            if rs is not None:
+                vs.realservers[service] = rs
+
+        # Add backups
+        for backup in ["primary", "second"]:
+            service = self.cache(('apCnt%sSorryServer' % backup.capitalize(),
+                                  oowner, ocontent))
+            if not service: continue
+            rs = defer.waitForDeferred(self.process_rs(service, backup))
             yield rs
             rs = rs.getResult()
             if rs is not None:
@@ -235,13 +246,12 @@ class ArrowOrCsCollector(GenericCollector):
         return
 
     @defer.deferredGenerator
-    def process_rs(self, owner, content, service):
+    def process_rs(self, service, backup=False):
         """
         Process data for a given virtual server and real server.
 
-        @param owner: owner of the content
-        @param content: content name
         @param service: service name
+        @param backup: C{False} or a string representing backup position
 
         @return: a deferred C{IRealServer} or None
         """
@@ -261,10 +271,14 @@ class ArrowOrCsCollector(GenericCollector):
         rport = self.cache(('apSvcPort', oservice))
         protocol = self.protocols[
             self.cache(('apSvcIPProtocol', oservice))]
-        weight = self.cache(('apSvcWeight', oservice))
         state = self.states[
             self.cache(('apSvcState', oservice))]
-        rs = RealServer(service, rip, rport, protocol, weight, state)
+        if not backup:
+            weight = self.cache(('apSvcWeight', oservice))
+            rs = RealServer(service, rip, rport, protocol, weight, state)
+        else:
+            rs = SorryServer(service, rip, rport, protocol, state)
+            rs.extra["backup type"] = backup
 
         rs.extra["KAL type"] = self.kals[
             self.cache(('apSvcKALType', oservice))]

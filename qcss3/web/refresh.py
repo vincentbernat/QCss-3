@@ -43,6 +43,7 @@ class RefreshMixIn:
                     d = self.refresh(self.lb, vs, rs)
                     d.addErrback(lambda x: log.msg("unable to autorefresh: %s" % x.value))
                     d.addCallback(lambda x: f(self, ctx, *args, **kwargs))
+                    return d
                 return f(self, ctx, *args, **kwargs)
 
             vs = hasattr(self, "vs") and self.vs or None

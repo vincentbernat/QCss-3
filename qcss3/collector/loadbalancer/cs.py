@@ -135,10 +135,10 @@ class ArrowOrCsCollector(GenericCollector):
         """
         Collect data.
 
-        A virtual server is OWNER:CONTENT. A real server is SERVICE.
+        A virtual server is OWNER|CONTENT. A real server is SERVICE.
         """
         if vs is not None:
-            mo = re.match(r"(.*):(.*)", vs)
+            mo = re.match(r"(.*)|(.*)", vs)
             if not mo:
                 raise ValueError("%r is not a valid virtual server" % vs)
             owner, content = mo.groups()
@@ -173,7 +173,7 @@ class ArrowOrCsCollector(GenericCollector):
             yield vs
             vs = vs.getResult()
             if vs is not None:
-                self.lb.virtualservers["%s:%s" % (owner, content)] = vs
+                self.lb.virtualservers["%s|%s" % (owner, content)] = vs
         yield self.lb
         return
 

@@ -14,6 +14,7 @@ import re
 
 from twisted.plugin import IPlugin
 from twisted.internet import defer
+from twisted.python import log
 from zope.interface import implements
 
 from qcss3.collector.icollector import ICollector, ICollectorFactory

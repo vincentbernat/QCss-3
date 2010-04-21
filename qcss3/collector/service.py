@@ -20,6 +20,7 @@ class CollectorService(service.Service):
         self.config = config
         self.dbpool = dbpool
         self.setName("SNMP collector")
+        self.inprogress = {}
         AgentProxy.use_getbulk = self.config.get("bulk", True)
 
     def refresh(self, lb=None, vs=None, rs=None):
@@ -33,10 +34,23 @@ class CollectorService(service.Service):
         If the name of the loadbalancer is not specified, each load
         balancer is refreshed.
         """
+        # If we already have a refresh in progress, return it. If we
+        # ask to refresh a real server and the corresponding load
+        # balancer is refreshing, we wait for the load balancer
+        # refresh.
+        if (lb, None, None) in self.inprogress:
+            return self.inprogress[lb, None, None]
+        if lb is not None and vs is not None:
+            if (lb, vs, None) in self.inprogress:
+                return self.inprogress[lb, vs, None]
+            if rs is not None and (lb, vs, rs) in self.inprogress:
+                return self.inprogress[lb, vs, rs]
+
         if lb is None:
             lbs = self.config.get("lb", {}).keys()
         else:
             lbs = [lb]
+
         d = defer.succeed(lb)
         for alb in lbs:
             if alb not in self.config.get("lb", {}):
@@ -58,6 +72,11 @@ class CollectorService(service.Service):
                         "Error while exploring %s:\n%s" % (lb, x)), alb)
         if lb is None:
             d.addCallback(lambda x: self.expire())
+
+        # Add our deferred to the list of refresh in progress and
+        # remove it when everything is done.
+        self.inprogress[lb, vs, rs] = d
+        d.addBoth(lambda x: self.inprogress.pop((lb, vs, rs), True) and x)
         return d
 
     def expire(self):

@@ -236,9 +236,8 @@ class KeepalivedCollector(GenericCollector):
                                                        self.cache(('virtualServerGroupMemberPort',
                                                                    g, m))))
                         elif grouptype == "fwmark":
-                            names.append("mark%d:%d" % tuple(
-                                    self.cache(('virtualServerGroupMemberFwMark', g, m),
-                                               ('virtualServerGroupMemberPort', g, m))))
+                            names.append("mark%d:0" % self.cache((
+                                        'virtualServerGroupMemberFwMark', g, m)))
                         else:
                             # Unknown type, continue
                             continue

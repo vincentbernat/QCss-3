@@ -18,6 +18,7 @@ import re
 
 from twisted.plugin import IPlugin
 from twisted.internet import defer
+from twisted.python import log
 from zope.interface import implements
 
 from qcss3.collector.icollector import ICollector, ICollectorFactory
@@ -224,7 +225,8 @@ class AlteonCollector(GenericCollector):
                 vs = defer.waitForDeferred(self.process_vs(v, s, g))
                 yield vs
                 vs = vs.getResult()
-                self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = vs
+                if vs is not None:
+                    self.lb.virtualservers["v%ds%dg%d" % (v, s, g)] = vs
         yield self.lb
         return
 
@@ -236,7 +238,7 @@ class AlteonCollector(GenericCollector):
         @param v: virtual server
         @param s: service
         @param g: group
-        @return: a maybe deferred C{IVirtualServer}
+        @return: a maybe deferred C{IVirtualServer} or C{None}
         """
         # Retrieve some data if needed
         c = defer.waitForDeferred(self.cache_or_get(
@@ -259,6 +261,10 @@ class AlteonCollector(GenericCollector):
 
         # (v,s,g) is our tuple for a virtual server, let's build it
         index = "v%ds%dg%d" % (v, s, g)
+        if not self.is_cached(('slbCurCfgGroupName', g)):
+            log.msg("%s is in an inexistant group" % index)
+            yield None
+            return
         name = " ~ ".join([x for x in self.cache(
                     ('slbCurCfgVirtServerVname', v),
                     ('slbCurCfgVirtServiceHname', v, s),
@@ -283,6 +289,9 @@ class AlteonCollector(GenericCollector):
             rs = defer.waitForDeferred(self.process_rs(v, s, g, r))
             yield rs
             rs = rs.getResult()
+            if rs is None:
+                # This real does not exist
+                continue
             vs.realservers["r%d" % r] = rs
 
             # Maybe a backup server?
@@ -293,7 +302,8 @@ class AlteonCollector(GenericCollector):
                 rs = defer.waitForDeferred(self.process_rs(v, s, g, backup, True))
                 yield rs
                 rs = rs.getResult()
-                vs.realservers["b%d" % backup] = rs
+                if rs is not None:
+                    vs.realservers["b%d" % backup] = rs
 
         # Attach backup servers
         backup = self.cache(('slbCurCfgGroupBackupServer', g))
@@ -301,19 +311,26 @@ class AlteonCollector(GenericCollector):
             rs = defer.waitForDeferred(self.process_rs(v, s, g, backup, True))
             yield rs
             rs = rs.getResult()
-            vs.realservers["b%d" % backup] = rs
+            if rs is not None:
+                vs.realservers["b%d" % backup] = rs
         backup = self.cache(('slbCurCfgGroupBackupGroup', g))
         if backup:
             # We need to retrieve corresponding real servers.
-            g = defer.waitForDeferred(
-                self.proxy.get((self.oids['slbCurCfgGroupRealServers'], backup)))
-            yield g
-            g.getResult()
+            try:
+                g = defer.waitForDeferred(
+                    self.cache_or_get(('slbCurCfgGroupRealServers', backup)))
+                yield g
+                g.getResult()
+            except KeyError:
+                log.msg("%s has an inexistant backup group %d" % (index, backup))
+                yield vs
+                return
             for r in self.bitmap(self.cache(('slbCurCfgGroupRealServers', backup))):
                 rs = defer.waitForDeferred(self.process_rs(v, s, g, r, True))
                 yield rs
                 rs = rs.getResult()
-                vs.realservers["b%d" % r] = rs
+                if rs is not None:
+                    vs.realservers["b%d" % r] = rs
 
         yield vs
         return
@@ -328,6 +345,7 @@ class AlteonCollector(GenericCollector):
         @param g: group
         @param r: real server
         @param backup: is it a backup server?
+        @return: a maybe deferred C{IRealServer} or C{None}
         """
         # Retrieve some data if needed:
         c = defer.waitForDeferred(self.cache_or_get(
@@ -349,6 +367,10 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgRealServerIpAddr', r),
             ('slbCurCfgRealServerName', r),
             ('slbCurCfgVirtServiceRealPort', v, s))
+        if rip is None:
+            log.msg("inexistant real server %d for v%ds%dg%d" % (r, v, s, g))
+            yield None
+            return
         if not name: name = rip
         protocol = "TCP"
         if self.cache(('slbCurCfgVirtServiceUDPBalance', v, s)) != 3:

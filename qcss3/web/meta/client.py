@@ -336,7 +336,8 @@ class ProxyResource(rend.Page):
         def cycle(services=None):
             if services is None:
                 if self.lb not in self.client.loadbalancers[date]:
-                    return None
+                    request.setResponseCode(404) # Unknown load balancer
+                    return "<h1>Resource was not found</h1>"
                 services = self.client.loadbalancers[date][self.lb][:]
             if not services:
                 return nogateway()

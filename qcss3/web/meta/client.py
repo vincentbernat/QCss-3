@@ -79,14 +79,19 @@ class MetaClient(object):
         def getPage(url):
             # Small reimplementation of twisted.web.client.getPage
             scheme, host, port, path = twclient._parse(url)
-            factory = MetaHTTPClientFactory(url, timeout=self.timeout,
-                                            agent='QCss3 MetaWeb client on %s' % os.uname()[1])
+            args = {}
+            if timeout:
+                args["timeout"] = timeout
+            factory = MetaHTTPClientFactory(
+                url,
+                agent='QCss3 MetaWeb client on %s' % os.uname()[1],
+                **args)
             if scheme == 'https':
                 from twisted.internet import ssl
                 contextFactory = ssl.ClientContextFactory()
-                reactor.connectSSL(host, port, factory, contextFactory, timeout=self.timeout)
+                reactor.connectSSL(host, port, factory, contextFactory, **args)
             else:
-                reactor.connectTCP(host, port, factory, timeout=self.timeout)
+                reactor.connectTCP(host, port, factory, **args)
             factory.deferred.addCallback(lambda data:
                                              (data, int(factory.status),
                                               "".join(factory.response_headers["content-type"])))

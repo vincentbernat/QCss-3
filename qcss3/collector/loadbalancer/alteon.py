@@ -321,7 +321,7 @@ class AlteonCollector(GenericCollector):
                     self.cache_or_get(('slbCurCfgGroupRealServers', backup)))
                 yield g
                 g.getResult()
-            except KeyError:
+            except:
                 log.msg("In %r, %s has an inexistant backup group %d" % (self.lb.name,
                                                                          index, backup))
                 yield vs

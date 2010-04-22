@@ -160,7 +160,7 @@ class F5LTMCollector(GenericCollector):
 
         # No IPv6 virtual server
         if self.cache(('ltmVirtualServAddrType', ov)) != 1:
-            log.msg("unable to handle IPv6 virtual server %d, skip it" % v)
+            log.msg("In %r, unable to handle IPv6 virtual server %d, skip it" % (self.lb.name, v))
             yield None
             return
 
@@ -213,7 +213,7 @@ class F5LTMCollector(GenericCollector):
                     yield pm
                     pm.getResult()
         if not self.is_cached(('ltmPoolMbrStatusAvailState', op, 1, 4)):
-            log.msg("unable to handle IPv6 real servers for virtual server %s, skip it" % v)
+            log.msg("In %r, unable to handle IPv6 real servers for virtual server %s, skip it" % (self.lb.name, v))
             yield None
             return
         for r in self.cache(('ltmPoolMbrStatusAvailState', op, 1, 4)):

@@ -186,7 +186,9 @@ class KeepalivedCollector(GenericCollector):
         elif virttype == "ip":
             # We have an IP address. We only support IPv4.
             if self.cache(('virtualServerAddrType', v)) != 1:
-                log.msg("unable to handle IPv6 virtual server %d, skip it" % v)
+                log.msg(
+                    "In %r, unable to handle IPv6 virtual server %d, skip it" % (
+                        self.lb.name, v))
                 yield None
                 return
             ip = socket.inet_ntoa(self.cache(('virtualServerAddress', v)))
@@ -243,13 +245,17 @@ class KeepalivedCollector(GenericCollector):
                     break
             # We need to build the VIP from names
             if not names:
-                log.msg("unable to build a VIP for virtual server group %s, skip it" % name)
+                log.msg(
+                    "In %r, unable to build a VIP for virtual server group %s, skip it" % (
+                        self.lb.name, name))
                 yield None
                 return
             vip = " + ".join(names)
         else:
             # Unknown type, don't return a load balancer
-            log.msg("unknown type for virtual server %d (%d), skip it" % (v, virttype))
+            log.msg("In %r, unknown type for virtual server %d (%d), skip it" % (self.lb.name,
+                                                                                 v,
+                                                                                 virttype))
             yield None
             return
 
@@ -324,7 +330,7 @@ class KeepalivedCollector(GenericCollector):
 
         # Build the real server
         if self.cache(('realServerAddrType', v, r)) != 1:
-            log.msg("real server %d for virtual server %v is not IPv4, skip it" % (r, v))
+            log.msg("In %r, real server %d for virtual server %v is not IPv4, skip it" % (self.lb.name, r, v))
             yield None
             return
         rip = socket.inet_ntoa(self.cache(('realServerAddress', v, r)))

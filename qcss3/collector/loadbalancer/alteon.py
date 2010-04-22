@@ -262,7 +262,7 @@ class AlteonCollector(GenericCollector):
         # (v,s,g) is our tuple for a virtual server, let's build it
         index = "v%ds%dg%d" % (v, s, g)
         if not self.is_cached(('slbCurCfgGroupName', g)):
-            log.msg("%s is in an inexistant group" % index)
+            log.msg("In %r, %s is in an inexistant group" % (self.lb.name, index))
             yield None
             return
         name = " ~ ".join([x for x in self.cache(
@@ -322,7 +322,8 @@ class AlteonCollector(GenericCollector):
                 yield g
                 g.getResult()
             except KeyError:
-                log.msg("%s has an inexistant backup group %d" % (index, backup))
+                log.msg("In %r, %s has an inexistant backup group %d" % (self.lb.name,
+                                                                         index, backup))
                 yield vs
                 return
             for r in self.bitmap(self.cache(('slbCurCfgGroupRealServers', backup))):
@@ -368,7 +369,8 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgRealServerName', r),
             ('slbCurCfgVirtServiceRealPort', v, s))
         if rip is None:
-            log.msg("inexistant real server %d for v%ds%dg%d" % (r, v, s, g))
+            log.msg("In %r, inexistant real server %d for v%ds%dg%d" % (self.lb.name,
+                                                                        r, v, s, g))
             yield None
             return
         if not name: name = rip

@@ -83,10 +83,10 @@ class F5LTMCollector(GenericCollector):
 		5: 'down',
         }
     enabledstates = {
-        0: 'suspended',
+        0: 'disabled',
         1: 'enabled',
-        2: 'suspended',
-        3: 'suspended',
+        2: 'disabled',
+        3: 'disabled',
         }
 
     def collect(self, vs=None, rs=None):
@@ -264,7 +264,7 @@ class F5LTMCollector(GenericCollector):
         avail, enabled = self.cache(('ltmPoolMbrStatusAvailState', op, 1, orip, port),
                                     ('ltmPoolMbrStatusEnabledState', op, 1, orip, port))
         if self.enabledstates[enabled] != "enabled":
-            state = "suspended"
+            state = "disabled"
         else:
             state = self.availstates[avail]
         rs = RealServer(name, rip, port, protocol, weight, state)

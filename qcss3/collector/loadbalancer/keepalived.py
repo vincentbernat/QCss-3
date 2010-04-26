@@ -391,10 +391,15 @@ class KeepalivedCollector(GenericCollector):
         if r is None:
             yield {}
             return
-        d = defer.waitForDeferred(
-            self.proxy.get((self.oids['realServerWeight'], r)))
-        yield d
-        d.getResult()
+        try:
+            d = defer.waitForDeferred(
+                self.proxy.get((self.oids['realServerWeight'], r)))
+            yield d
+            d.getResult()
+        except:
+            # No weight, this is a sorry server
+            yield {}
+            return
         if self.cache(('realServerWeight', r)) == 0:
             results = {'enable': 'Enable'}
             for weight in range(1,6):

@@ -1,3 +1,7 @@
+"""
+Past handling resources
+"""
+
 import re
 from zope.interface import Interface
 from twisted.python import log

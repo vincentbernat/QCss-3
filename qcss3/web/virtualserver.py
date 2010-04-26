@@ -1,3 +1,7 @@
+"""
+Virtualserver related pages
+"""
+
 from qcss3.web.json import JsonPage
 from qcss3.web.realserver import RealServerResource, SorryServerResource
 from qcss3.web.refresh import RefreshResource, RefreshMixIn

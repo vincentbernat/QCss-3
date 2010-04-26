@@ -1,3 +1,7 @@
+"""
+Realserver related pages
+"""
+
 from qcss3.web.json import JsonPage
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
 from qcss3.web.action import ActionResource

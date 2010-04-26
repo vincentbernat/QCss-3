@@ -1,3 +1,7 @@
+"""
+Main service for collector
+"""
+
 import socket
 
 from twisted.internet import defer

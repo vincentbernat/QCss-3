@@ -1,3 +1,7 @@
+"""
+Status pages for metaweb
+"""
+
 from qcss3.web.json import JsonPage
 from qcss3.web.timetravel import IPastDate
 

@@ -1,3 +1,7 @@
+"""
+Web service main module
+"""
+
 from nevow import rend, appserver, loaders, page
 from nevow import tags as T
 

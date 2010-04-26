@@ -1,3 +1,7 @@
+"""
+Database initialization and upgrade.
+"""
+
 # When modifying this class, also update doc/database.sql
 
 from twisted.python import log

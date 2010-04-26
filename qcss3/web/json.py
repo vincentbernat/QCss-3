@@ -1,3 +1,9 @@
+"""
+JSON handling stuff
+
+This module allows to rend a pages with JSON content
+"""
+
 from cStringIO import StringIO
 
 from twisted.internet import defer

@@ -1,3 +1,7 @@
+"""
+Exceptions for collector service
+"""
+
 class CollectorException(RuntimeError):
     pass
 

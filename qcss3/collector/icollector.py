@@ -1,3 +1,7 @@
+"""
+Interfaces for collectors
+"""
+
 from zope.interface import Interface, Attribute
 
 class ICollector(Interface):

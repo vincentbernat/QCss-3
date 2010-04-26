@@ -1,3 +1,7 @@
+"""
+Loadbalancer related pages
+"""
+
 from qcss3.web.json import JsonPage
 from qcss3.web.virtualserver import VirtualServerResource
 from qcss3.web.refresh import RefreshResource, RefreshMixIn

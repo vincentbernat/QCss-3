@@ -1,3 +1,7 @@
+"""
+Action related pages
+"""
+
 from twisted.internet import defer
 
 from qcss3.web.json import JsonPage

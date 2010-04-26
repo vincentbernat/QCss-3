@@ -1,3 +1,7 @@
+"""
+Search handling for metaweb
+"""
+
 from nevow import rend, loaders, tags as T
 
 from qcss3.web.timetravel import IPastDate

@@ -1,3 +1,10 @@
+"""
+Client part of the metaweb service
+
+This module is the client part of the metaweb service: it contains
+classes to query real web services or to act as a proxy.
+"""
+
 import time
 import urllib
 import os
@@ -20,8 +27,7 @@ class MetaHTTPPageGetter(twclient.HTTPPageGetter):
 
     Unlike the original page getter, this one does not raise
     exceptions when getting values like 404. Exceptions are raisen on
-    network errors (connect timeout, connection refused) or on error
-    500.
+    network errors (connect timeout, connection refused) or on error 500.
     """
     def handleStatusDefault(self):
         pass

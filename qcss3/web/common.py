@@ -1,3 +1,7 @@
+"""
+Common stuff for all pages
+"""
+
 import re
 
 from zope.interface import Interface

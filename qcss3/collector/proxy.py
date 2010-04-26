@@ -1,3 +1,7 @@
+"""
+SNMP proxy
+"""
+
 import snmp
 from snmp import AgentProxy as original_AgentProxy
 from twisted.internet import defer
@@ -94,13 +98,13 @@ class AgentProxy(WalkAgentProxy):
         The cache is queried for prefix if a requested OID is not
         found. This allows to use a for loop.
 
-        @param oid: an OID
-        @return: A value for an exact match or a trimmed dictionary
-           for prefix match. If several OID are asked, return a list.
-
         A trimmed dictionary is a dictionary whose keys have been
         prefix-stripped and converted to a tuple of integers or to a
         simple integer.
+
+        @param oid: an OID
+        @return: A value for an exact match or a trimmed dictionary
+           for prefix match. If several OID are asked, return a list.
         """
         if len(oid) > 1:
             r = []

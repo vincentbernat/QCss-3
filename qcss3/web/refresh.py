@@ -1,3 +1,7 @@
+"""
+Handling refresh for various other resources.
+"""
+
 import time
 
 from twisted.internet import defer
@@ -7,6 +11,11 @@ from qcss3.web.json import JsonPage
 from qcss3.web.timetravel import IPastDate
 
 class RefreshMixIn:
+    """
+    Mixin to help ensure that a resource serves fresh results.
+
+    This mixin also checks for the existence of the resource.
+    """
 
     def isfresh(self, age, lb=None, vs=None, rs=None):
         """

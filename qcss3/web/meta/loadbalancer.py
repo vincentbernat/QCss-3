@@ -1,3 +1,7 @@
+"""
+Loadbalancer pages for metaweb client
+"""
+
 from qcss3.web.timetravel import IPastDate
 from qcss3.web.json import JsonPage
 from qcss3.web.meta.client import ProxyResource

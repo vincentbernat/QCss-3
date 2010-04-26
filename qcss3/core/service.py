@@ -1,3 +1,7 @@
+"""
+QCss3 service
+"""
+
 import os
 import sys
 import yaml

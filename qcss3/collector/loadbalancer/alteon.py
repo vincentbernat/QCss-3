@@ -62,6 +62,8 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgGroupBackupGroup': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.5',
         'slbCurCfgGroupBackupServer': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.4',
         'slbCurCfgRealServerBackUp': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.6',
+        # Oper
+        'slbOperGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.4.5.1.3',
         }
 
     kind = "AAS"
@@ -183,9 +185,9 @@ class AlteonCollector(GenericCollector):
         163: "script64",
         }
 
-    def collect(self, vs=None, rs=None):
+    def parse(self, vs=None, rs=None):
         """
-        Collect data for an Alteon
+        Parse vs and rs into v, s, g, r.
         """
         if vs is not None:
             mo = re.match(r"v(\d+)s(\d+)g(\d+)", vs)
@@ -197,6 +199,17 @@ class AlteonCollector(GenericCollector):
                 if not mo:
                     raise ValueError("%r is not a valid real server" % rs)
                 r = int(mo.group(1))
+                return v, s, g, r
+            return v, s, g, None
+        return None, None, None, None
+
+    def collect(self, vs=None, rs=None):
+        """
+        Collect data for an Alteon
+        """
+        v, s, g, r = self.parse(vs, rs)
+        if v is not None:
+            if r is not None:
                 # Collect data to refresh a specific real server
                 d = self.process_rs(v, s, g, r)
             else:
@@ -395,6 +408,34 @@ class AlteonCollector(GenericCollector):
                          'fail retry': fr,
                          'success retry': sr})
         yield rs
+        return
+
+    @defer.deferredGenerator
+    def actions(self, vs=None, rs=None):
+        """
+        List possible actions.
+
+        Possible actions are enable/disable and operenable/operdisable.
+        """
+        results = {}
+        v, s, g, r = self.parse(vs, rs)
+        if r is None:
+            yield {}
+            return
+        d = defer.waitForDeferred(
+            self.proxy.get([(self.oids['slbOperGroupRealServerState'], g, r),
+                            (self.oids['slbCurCfgGroupRealServerState'], g, r)]))
+        yield d
+        d.getResult()
+        if self.cache(('slbOperGroupRealServerState', g, r)) == 1:
+            results["operdisable"] = "Disable (oper)"
+        else:
+            results["operenable"] = "Enable (oper)"
+        if self.cache(('slbCurCfgGroupRealServerState', g, r)) == 1:
+            results["disable"] = "Disable"
+        else:
+            results["enable"] = "Enable"
+        yield results
         return
 
 class AlteonCollectorFactory:

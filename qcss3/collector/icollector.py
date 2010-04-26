@@ -15,6 +15,15 @@ class ICollector(Interface):
             C{IVirtualServer}, C{IRealServer} or C{ISorryServer}.
         """
 
+    def actions(vs=None, rs=None):
+        """
+        Indicate which actions are possible.
+
+        @param vs: if specified, return actions possible for this virtual server
+        @param rs: if specified, return actions possible for this real server
+        @return: a mapping between possible actions and their description
+        """
+
 class ICollectorFactory(Interface):
     """
     Interface for a factory of collector gathering load balancer information.

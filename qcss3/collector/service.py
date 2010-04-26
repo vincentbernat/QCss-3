@@ -23,6 +23,24 @@ class CollectorService(service.Service):
         self.inprogress = {}
         AgentProxy.use_getbulk = self.config.get("bulk", True)
 
+    def actions(self, lb, vs=None, rs=None):
+        """
+        Give the list of actions available for a load balancer or a part of it
+        """
+        if lb not in self.config.get("lb", {}):
+            raise UnknownLoadBalancer, "%s is not not a known loadbalancer" % lb
+        # If not an IP, try to solve
+        d = defer.succeed(lb)
+        try:
+            socket.inet_aton(lb)
+        except:
+            d.addCallback(lambda x, lb: client.getHostByName(lb), lb)
+        d.addCallback(lambda ip: LoadBalancerCollector(lb, ip,
+                                                       self.config.get("lb", {})[lb],
+                                                       self.config,
+                                                       self.dbpool).actions(vs, rs))
+        return d
+
     def refresh(self, lb=None, vs=None, rs=None):
         """
         Refresh the specified LB or a subset of it
@@ -196,3 +214,16 @@ class LoadBalancerCollector:
                        lambda x: self.releaseProxy() or x)
         return d
 
+
+    def actions(self, vs=None, rs=None):
+        """
+        Give the list of actions for LB
+
+        @param vs: if specified, list only for the specified virtual server
+        @param rs: if specified, list only for the specified real server
+        """
+        d = self.getProxy()
+        d.addCallback(lambda x: self.findCollector())
+        d.addCallback(lambda x: x.actions(vs, rs))
+        d.addBoth(lambda x: self.releaseProxy() and x or x)
+        return d

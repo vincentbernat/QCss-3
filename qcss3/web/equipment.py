@@ -1,6 +1,7 @@
 from qcss3.web.json import JsonPage
 from qcss3.web.virtualserver import VirtualServerResource
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
+from qcss3.web.action import ActionResource
 
 class LoadBalancerResource(JsonPage):
     """
@@ -68,6 +69,9 @@ AND deleted='infinity'
         return VirtualServerResource(self.lb,
                                      self.dbpool,
                                      self.collector)
+
+    def child_action(self, ctx):
+        return ActionResource(self.dbpool, self.collector, self.lb)
 
     def child_refresh(self, ctx):
         return RefreshResource(self.dbpool, self.collector,

@@ -131,17 +131,26 @@ class ArrowOrCsCollector(GenericCollector):
             self.oids[oid] = "%s%s" % (self.baseoid, oids[oid])
         GenericCollector.__init__(self, *args, **kwargs)
 
-    def collect(self, vs=None, rs=None):
+    def parse(self, vs=None, rs=None):
         """
-        Collect data.
-
-        A virtual server is OWNER|CONTENT. A real server is SERVICE.
+        Parse vs and rs into owner, content, rs
         """
         if vs is not None:
             mo = re.match(r"(.*)|(.*)", vs)
             if not mo:
                 raise ValueError("%r is not a valid virtual server" % vs)
             owner, content = mo.groups()
+            return owner, content, rs
+        return None, None, None
+
+    def collect(self, vs=None, rs=None):
+        """
+        Collect data.
+
+        A virtual server is OWNER|CONTENT. A real server is SERVICE.
+        """
+        owner, content, rs = self.parse(vs, rs)
+        if owner is not None:
             if rs is not None:
                 # Collect data to refresh a specific real server
                 d = self.process_rs(owner, content, rs)
@@ -297,6 +306,14 @@ class ArrowOrCsCollector(GenericCollector):
                 pass
         yield rs
         return
+
+    def actions(self, vs=None, rs=None):
+        """
+        List possible actions.
+
+        On this equipment, there is no possible action for now.
+        """
+        return defer.succeed({})
 
 class ArrowCollector(ArrowOrCsCollector):
     """

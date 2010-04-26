@@ -1,6 +1,7 @@
 from qcss3.web.json import JsonPage
 from qcss3.web.realserver import RealServerResource, SorryServerResource
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
+from qcss3.web.action import ActionResource
 
 def aggregate_state(states):
     if not states:
@@ -180,6 +181,9 @@ AND vs.vs = %(vs)s
 
     def child_sorryserver(self, ctx):
         return SorryServerResource(self.lb, self.vs, self.dbpool, self.collector)
+
+    def child_action(self, ctx):
+        return ActionResource(self.dbpool, self.collector, self.lb, self.vs)
 
     def child_refresh(self, ctx):
         return RefreshResource(self.dbpool, self.collector,

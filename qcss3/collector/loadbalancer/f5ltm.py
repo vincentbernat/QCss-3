@@ -89,12 +89,9 @@ class F5LTMCollector(GenericCollector):
         3: 'disabled',
         }
 
-    def collect(self, vs=None, rs=None):
+    def parse(self, vs=None, rs=None):
         """
-        Collect data for an F5 Big IP LTM.
-
-        @param vs: any string identifying a virtual server
-        @param rs: IP:port identifying a pool member
+        Parse vs and rs into vs, r, p
         """
         if vs is not None:
             if rs is not None:
@@ -106,6 +103,20 @@ class F5LTMCollector(GenericCollector):
                     socket.inet_aton(r)
                 except:
                     raise ValueError("%r is not a valid IP:port" % rs)
+                return vs, r, p
+            return vs, None, None
+        return None, None, None
+
+    def collect(self, vs=None, rs=None):
+        """
+        Collect data for an F5 Big IP LTM.
+
+        @param vs: any string identifying a virtual server
+        @param rs: IP:port identifying a pool member
+        """
+        vs, r, p = self.parse(vs, rs)
+        if vs is not None:
+            if r is not None:
                 # Collect data to refresh a specific real server
                 d = self.process_rs(vs, r, p)
             else:
@@ -292,6 +303,15 @@ class F5LTMCollector(GenericCollector):
             yield oid2str(k)
             break
         return
+
+    def actions(self, vs=None, rs=None):
+        """
+        List possible actions.
+
+        On F5, there is no possible action for now.
+        """
+        return defer.succeed({})
+
 
 class F5LTMCollectorFactory:
     implements(ICollectorFactory, IPlugin)

@@ -112,9 +112,9 @@ class KeepalivedCollector(GenericCollector):
         2: False
         }
 
-    def collect(self, vs=None, rs=None):
+    def parse(self, vs=None, rs=None):
         """
-        Collect data for a Keepalived
+        Parse vs and rs into v, s, g, r.
         """
         if vs is not None:
             mo = re.match(r"v(\d+)", vs)
@@ -126,6 +126,17 @@ class KeepalivedCollector(GenericCollector):
                 if not mo:
                     raise ValueError("%r is not a valid real server" % rs)
                 r = int(mo.group(1))
+                return v, r
+            return v, None
+        return None, None
+
+    def collect(self, vs=None, rs=None):
+        """
+        Collect data for a Keepalived
+        """
+        v, r = self.parse(vs, rs)
+        if v is not None:
+            if r is not None:
                 # Collect data to refresh a specific real server
                 d = self.process_rs(v, r)
             else:
@@ -366,6 +377,33 @@ class KeepalivedCollector(GenericCollector):
             rs = SorryServer(name, rip, rport, protocol, "up")
         yield rs
         return
+
+    @defer.deferredGenerator
+    def actions(self, vs=None, rs=None):
+        """
+        List possible actions. Actions are possible on a real server only.
+
+        Check if the weight of the real server is 0 or not and propose
+        disable or enable. Enabling can be done with different
+        weights.
+        """
+        v, r = self.parse(vs, rs)
+        if r is None:
+            yield {}
+            return
+        d = defer.waitForDeferred(
+            self.proxy.get((self.oids['realServerWeight'], r)))
+        yield d
+        d.getResult()
+        if self.cache(('realServerWeight', r)) == 0:
+            results = {'enable': 'Enable'}
+            for weight in range(1,6):
+                results['enable%d' % weight: 'Enable with weight %d' % weight]
+            yield results
+            return
+        else:
+            yield {'disable': 'Disable'}
+            return
 
 class KeepalivedCollectorFactory:
     implements(ICollectorFactory, IPlugin)

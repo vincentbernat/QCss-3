@@ -86,8 +86,7 @@ class MetaClient(object):
             # Small reimplementation of twisted.web.client.getPage
             scheme, host, port, path = twclient._parse(url)
             args = {}
-            if timeout:
-                args["timeout"] = timeout
+            args["timeout"] = timeout or 120
             factory = MetaHTTPClientFactory(
                 url,
                 agent='QCss3 MetaWeb client on %s' % os.uname()[1],

@@ -76,7 +76,10 @@ class MetaClient(object):
         Request a page from a remote service.
 
         @param service: URL of remote service to use
-        @param timeout: timeout to use (0 to disable)
+        @param timeout: timeout to use; this timeout is used both for
+           TCP connection and for HTTP. Therefore, it is better to
+           specify a short one or to use the default ones. 0 does not
+           disable the timeouts but will make use the default ones.
         @param date: date of request (None if no date)
         @param request: request to issue (without prefix /api/1.0/ and without suffix /)
         @return: a tuple containing the data, the status code and the content-type
@@ -85,18 +88,16 @@ class MetaClient(object):
         def getPage(url):
             # Small reimplementation of twisted.web.client.getPage
             scheme, host, port, path = twclient._parse(url)
-            args = {}
-            args["timeout"] = timeout or 120
             factory = MetaHTTPClientFactory(
                 url,
                 agent='QCss3 MetaWeb client on %s' % os.uname()[1],
-                **args)
+                timeout=timeout or 120)
             if scheme == 'https':
                 from twisted.internet import ssl
                 contextFactory = ssl.ClientContextFactory()
-                reactor.connectSSL(host, port, factory, contextFactory, **args)
+                reactor.connectSSL(host, port, factory, contextFactory, timeout=timeout or 10)
             else:
-                reactor.connectTCP(host, port, factory, **args)
+                reactor.connectTCP(host, port, factory, timeout=timeout or 10)
             factory.deferred.addCallback(lambda data:
                                              (data, int(factory.status),
                                               "".join(factory.response_headers["content-type"])))

@@ -33,6 +33,28 @@ class RefreshMixIn:
         return True
 
     @classmethod
+    def exist(cls, f):
+        """
+        Decorator to check the existence of a resource in the present.
+
+        This decorator will make the decorated function return C{None} if
+        we are in the past!
+        """
+
+        def wrapped(self, ctx, *args, **kwargs):
+
+            def validate(x):
+                if x is not None and x >= 0:
+                    return f(self, ctx, *args, **kwargs)
+                return None
+
+            d = defer.maybeDeferred(self.age, ctx, self.lb, self.vs, self.rs, self.sorry)
+            d.addCallback(validate)
+            return d
+
+        return wrapped
+
+    @classmethod
     def fresh(cls, f):
         """
         Decorator to ensure that data is fresh.
@@ -144,9 +166,6 @@ class RefreshResource(JsonPage, RefreshMixIn):
         self.sorry = sorry
         JsonPage.__init__(self)
 
+    @RefreshMixIn.exist
     def data_json(self, ctx, data):
-        d = defer.maybeDeferred(self.age, ctx, self.lb, self.vs, self.rs, self.sorry)
-        d.addCallback(lambda x: x is not None and x >= 0 and
-                      self.refresh(self.lb, self.vs, self.rs) or None)
-        return d
-
+        return self.refresh(self.lb, self.vs, self.rs)

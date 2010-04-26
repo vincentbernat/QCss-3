@@ -24,13 +24,6 @@ class ActionResource(JsonPage, RefreshMixIn):
         self.rs = rs
         self.sorry = sorry
 
+    @RefreshMixIn.exist
     def data_json(self, ctx, data):
-
-        def validate(x):
-            if x is not None and x >= 0:
-                return self.collector.actions(self.lb, self.vs, self.rs)
-            return None
-
-        d = defer.maybeDeferred(self.age, ctx, self.lb, self.vs, self.rs, self.sorry)
-        d.addCallback(validate)
-        return d
+        return self.collector.actions(self.lb, self.vs, self.rs)

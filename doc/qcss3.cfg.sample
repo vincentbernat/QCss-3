@@ -1,13 +1,35 @@
 %YAML 1.1
 ---
+# Most fields are optional. This sample file usually shows the default
+# values.
 
-collector:
-  lb: { lb1.example.org: public,
-        lb2.example.org: public,
-        lb3.example.org: public,
-        lb4.example.org: public }
+# Database settings
 database:
   host: localhost
   username: qcss3
   password: qcss3
   database: qcss3
+
+# Collector service
+collector:
+  bulk: 1			  # USe GETBULK instead of GETNEXT
+  lb: { lb1.example.org: public,   # a load balancer
+        lb2.example.org: public,   # another one
+        lb3.example.org: public,   # another one
+        lb4.example.org: public }  # another one
+
+# Web service
+web:
+  interface: 127.0.0.1		# Interface we should listen to
+  port: 8089			# Port we should listen to
+
+# Meta web service
+metaweb:
+  interface: 127.0.0.1		    # Interface we should listen to
+  port: 8090			    # Port we should listen to
+  proxy: [ 'http://127.0.0.1:8089', # localhost
+           'http://1.2.3.4:8089',   # another host
+           'http://1.2.3.5:8089' ]  # yet another host
+  parallel: 10 # Number of parallel clients
+  expire: 30   # Number of seconds we should consider the list of loadbalancers fresh
+  timeout: 2   # Timeout to get the list of load balancers from a web service

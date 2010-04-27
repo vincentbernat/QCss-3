@@ -4,7 +4,7 @@ Realserver related pages
 
 from qcss3.web.json import JsonPage
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
-from qcss3.web.action import ActionResource
+from qcss3.web.action import ActionMixIn
 
 class RealOrSorryServerResource(JsonPage, RefreshMixIn):
     """
@@ -67,7 +67,7 @@ class SorryServerResource(RealOrSorryServerResource):
         return SorryServerDetailResource(self.lb, self.vs, name,
                                          self.dbpool, self.collector)
 
-class RealOrSorryServerDetailResource(JsonPage, RefreshMixIn):
+class RealOrSorryServerDetailResource(JsonPage, RefreshMixIn, ActionMixIn):
     """
     Give the details about a real server.
 
@@ -121,6 +121,7 @@ class RealOrSorryServerDetailResource(JsonPage, RefreshMixIn):
         return self.results
 
     @RefreshMixIn.fresh
+    @ActionMixIn.actions
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT rs.name, rs.rip, rs.port, rs.protocol, rs.weight, rs.rstate
@@ -153,10 +154,6 @@ AND rs.rs = %(vs)s
     def child_refresh(self, ctx):
         return RefreshResource(self.dbpool, self.collector,
                                self.lb, self.vs, self.rs, self.sorry)
-
-    def child_action(self, ctx):
-        return ActionResource(self.dbpool, self.collector,
-                              self.lb, self.vs, self.rs, self.sorry)
 
 class RealServerDetailResource(RealOrSorryServerDetailResource):
     sorry = False

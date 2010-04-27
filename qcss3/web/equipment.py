@@ -5,7 +5,7 @@ Loadbalancer related pages
 from qcss3.web.json import JsonPage
 from qcss3.web.virtualserver import VirtualServerResource
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
-from qcss3.web.action import ActionResource
+from qcss3.web.action import ActionMixIn
 
 class LoadBalancerResource(JsonPage):
     """
@@ -33,7 +33,7 @@ class LoadBalancerResource(JsonPage):
     def childFactory(self, ctx, name):
         return LoadBalancerDetailResource(name, self.dbpool, self.collector)
 
-class LoadBalancerDetailResource(JsonPage, RefreshMixIn):
+class LoadBalancerDetailResource(JsonPage, RefreshMixIn, ActionMixIn):
     """
     Return details about a load balancer.
 
@@ -50,6 +50,7 @@ class LoadBalancerDetailResource(JsonPage, RefreshMixIn):
         JsonPage.__init__(self)
 
     @RefreshMixIn.fresh
+    @ActionMixIn.actions
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT name, description, type
@@ -73,9 +74,6 @@ AND deleted='infinity'
         return VirtualServerResource(self.lb,
                                      self.dbpool,
                                      self.collector)
-
-    def child_action(self, ctx):
-        return ActionResource(self.dbpool, self.collector, self.lb)
 
     def child_refresh(self, ctx):
         return RefreshResource(self.dbpool, self.collector,

@@ -13,10 +13,10 @@ database:
 # Collector service
 collector:
   bulk: 1			  # USe GETBULK instead of GETNEXT
-  lb: { lb1.example.org: public,   # a load balancer
-        lb2.example.org: public,   # another one
-        lb3.example.org: public,   # another one
-        lb4.example.org: public }  # another one
+  lb: { lb1.example.org: (public, private)   # a load balancer
+        lb2.example.org: (public, private)   # another one
+        lb3.example.org: public,   # another one, RO
+        lb4.example.org: public }  # another one, RO
 
 # Web service
 web:

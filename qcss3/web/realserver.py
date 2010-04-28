@@ -67,7 +67,7 @@ class SorryServerResource(RealOrSorryServerResource):
         return SorryServerDetailResource(self.lb, self.vs, name,
                                          self.dbpool, self.collector)
 
-class RealOrSorryServerDetailResource(JsonPage, RefreshMixIn, ActionMixIn):
+class RealOrSorryServerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     """
     Give the details about a real server.
 

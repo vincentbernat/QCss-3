@@ -33,7 +33,7 @@ class LoadBalancerResource(JsonPage):
     def childFactory(self, ctx, name):
         return LoadBalancerDetailResource(name, self.dbpool, self.collector)
 
-class LoadBalancerDetailResource(JsonPage, RefreshMixIn, ActionMixIn):
+class LoadBalancerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     """
     Return details about a load balancer.
 

@@ -310,8 +310,15 @@ class F5LTMCollector(GenericCollector):
 
         On F5, there is no possible action for now.
         """
-        return defer.succeed({})
+        return {}
 
+    def execute(self, action, vs=None, rs=None):
+        """
+        Execute an action.
+
+        On F5, there is no action to execute yet.
+        """
+        return None
 
 class F5LTMCollectorFactory:
     implements(ICollectorFactory, IPlugin)

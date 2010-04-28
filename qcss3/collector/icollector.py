@@ -21,11 +21,30 @@ class ICollector(Interface):
 
     def actions(vs=None, rs=None):
         """
-        Indicate which actions are possible.
+        Indicate which actions are possible
 
         @param vs: if specified, return actions possible for this virtual server
         @param rs: if specified, return actions possible for this real server
-        @return: a mapping between possible actions and their description
+        @param action: if specified, action to execute
+
+        @return: a mapping between possible actions and their
+           description
+        """
+
+    def execute(action, vs=None, rs=None):
+        """
+        Execute an action
+
+        @param action: action to execute. This action should be in the
+            list of possible actions as returned by L{actions};
+            however, this is not mandatory.
+        @param vs: if specified, execute action for this virtual server
+        @param rs: if specified, execute action for this real server
+
+        @return: C{None} if the action did not exist or the result of
+           the action (which cannot be C{None}). Triggering an
+           exception is a valid way to show that the action wasn't
+           executed correctly.
         """
 
 class ICollectorFactory(Interface):

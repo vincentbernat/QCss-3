@@ -56,6 +56,7 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.10',
         'slbCurCfgRealServerName': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.12',
         'slbCurCfgGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.5.1.3',
+        'slbNewCfgGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.6.1.3',
         'slbVirtServicesInfoState': '.1.3.6.1.4.1.1872.2.5.4.3.4.1.6',
         'slbRealServerInfoState': '.1.3.6.1.4.1.1872.2.5.4.3.1.1.7',
         # Sorry servers
@@ -64,6 +65,9 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgRealServerBackUp': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.6',
         # Oper
         'slbOperGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.4.5.1.3',
+        # Apply
+        'agApplyConfig': '.1.3.6.1.4.1.1872.2.5.1.1.8.2.0',
+        'agApplyPending': '.1.3.6.1.4.1.1872.2.5.1.1.8.1.0',
         }
 
     kind = "AAS"
@@ -437,6 +441,50 @@ class AlteonCollector(GenericCollector):
             results["enable"] = "Enable"
         yield results
         return
+
+    @defer.deferredGenerator
+    def execute(self, action, vs=None, rs=None):
+        """
+        Execute an action.
+
+        @param action: action to be executed
+        """
+        v, s, g, r = self.parse(vs, rs)
+        if r is None:
+            yield None
+            return
+        d = None
+        if action == "operenable" or action == "operdisable":
+            d = self.proxy.set((self.oids['slbOperGroupRealServerState'], g, r),
+                                action == "operenable" and 1 or 2)
+            d = defer.waitForDeferred(d)
+            yield d
+            d.getResult()
+            yield True
+            return
+        elif action == "enable" or action == "disable":
+            d = self.proxy.set((self.oids['slbNewCfgGroupRealServerState'], g, r),
+                                action == "enable" and 1 or 2)
+            d = defer.waitForDeferred(d)
+            yield d
+            d.getResult()
+            d = defer.waitForDeferred(
+                self.proxy.get([self.oids['agApplyPending'],
+                                self.oids['agApplyConfig']]))
+            yield d
+            d.getResult()
+            if self.cache(('agApplyPending',)) == 2: # apply needed
+                if self.cache(('agApplyConfig',)) == 4: # complete
+                    d = self.proxy.set((self.oids['agApplyConfig']), 2) # idle
+                    d = defer.waitForDeferred(d)
+                    yield d
+                    d.getResult()
+                d = self.proxy.set((self.oids['agApplyConfig']), 1) # apply
+                d = defer.waitForDeferred(d)
+                yield d
+                d.getResult()
+            yield True
+            return
 
 class AlteonCollectorFactory:
     implements(ICollectorFactory, IPlugin)

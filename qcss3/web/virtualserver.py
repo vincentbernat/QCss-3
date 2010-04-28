@@ -94,7 +94,7 @@ AND rs.deleted = 'infinity'
                                            self.dbpool,
                                            self.collector)
 
-class VirtualServerDetailResource(JsonPage, RefreshMixIn, ActionMixIn):
+class VirtualServerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     """
     Give details about a virtual server.
 

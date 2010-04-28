@@ -27,12 +27,21 @@ class CollectorService(service.Service):
         self.inprogress = {}
         AgentProxy.use_getbulk = self.config.get("bulk", True)
 
-    def actions(self, lb, vs=None, rs=None):
+    def get_collector(self, lb):
         """
-        Give the list of actions available for a load balancer or a part of it
+        Get a collector for the given load balancer
+
+        @param lb: name of the load balancer
+        @return: a L{LoadBalancerCollector} (deferred)
         """
         if lb not in self.config.get("lb", {}):
             raise UnknownLoadBalancer, "%s is not not a known loadbalancer" % lb
+        # Communities
+        community = self.config.get("lb", {})[lb]
+        if type(community) is list:
+            community, wcommunity = community
+        else:
+            community, wcommunity = community, None
         # If not an IP, try to solve
         d = defer.succeed(lb)
         try:
@@ -40,9 +49,22 @@ class CollectorService(service.Service):
         except:
             d.addCallback(lambda x, lb: client.getHostByName(lb), lb)
         d.addCallback(lambda ip: LoadBalancerCollector(lb, ip,
-                                                       self.config.get("lb", {})[lb],
+                                                       community, wcommunity,
                                                        self.config,
-                                                       self.dbpool).actions(vs, rs))
+                                                       self.dbpool))
+        return d
+
+    def actions(self, lb, vs=None, rs=None, action=None):
+        """
+        Give the list of available actions or execute one.
+
+        @param lb: load balancer on which to execute action
+        @param vs: virtual server
+        @param rs: real server
+        @param action: action to execute or C{None} to get a list
+        """
+        d = self.get_collector(lb)
+        d.addCallback(lambda collector: collector.actions(vs, rs, action))
         return d
 
     def refresh(self, lb=None, vs=None, rs=None):
@@ -85,19 +107,8 @@ class CollectorService(service.Service):
 
         d = defer.succeed(lb)
         for alb in lbs:
-            if alb not in self.config.get("lb", {}):
-                # Happens only when we have only one load balancer
-                raise UnknownLoadBalancer, "%s is not not a known loadbalancer" % lb
-            # If not an IP, try to solve
-            try:
-                socket.inet_aton(lb)
-            except:
-                d.addCallback(lambda x, lb: client.getHostByName(lb), alb)
-            d.addCallback(lambda ip, lb: LoadBalancerCollector(lb, ip,
-                                                               self.config.get("lb", {})[lb],
-                                                               self.config,
-                                                               self.dbpool).refresh(vs, rs),
-                          alb)
+            d.addCallback(lambda _, alb: self.get_collector(alb), alb)
+            d.addCallback(lambda collector: collector.refresh(vs, rs))
             if lb is None:
                 # Don't raise an exception if we are refreshing all load balancers
                 d.addErrback(lambda x, lb: log.msg(
@@ -127,10 +138,21 @@ AND deleted='infinity'
 class LoadBalancerCollector:
     """Service to collect data for a given load balancer"""
 
-    def __init__(self, lb, ip, community, config, dbpool):
+    def __init__(self, lb, ip, community, wcommunity, config, dbpool):
+        """
+        Create a new load balancer collector
+
+        @param lb: name of the load balancer
+        @param ip: IP of the load balancer
+        @param community: RO community for SNMP
+        @param wcommunity: RW community for SNMP (C{None} for a read-only collector)
+        @param config: collector configuration section
+        @param dbpool: dbpool
+        """
         self.lb = lb
         self.ip = ip
         self.community = community
+        self.wcommunity = wcommunity
         self.config = config
         self.dbpool = dbpool
         self.proxy = None
@@ -146,6 +168,7 @@ class LoadBalancerCollector:
         """
         proxy = AgentProxy(ip=self.ip,
                            community=self.community,
+                           wcommunity=self.wcommunity,
                            version=1)
         d = proxy.get(['.1.3.6.1.2.1.1.1.0', # description
                        '.1.3.6.1.2.1.1.2.0', # OID
@@ -219,15 +242,37 @@ class LoadBalancerCollector:
         return d
 
 
-    def actions(self, vs=None, rs=None):
+    def actions(self, vs=None, rs=None, action=None):
         """
-        Give the list of actions for LB
+        Give the list of actions for LB or execute one
 
         @param vs: if specified, list only for the specified virtual server
         @param rs: if specified, list only for the specified real server
+        @param action: if specified, the action to execute
+
+        @return: if action is C{None}, a list of actions. Otherwise,
+           C{None} if the action did not exist or the result of the
+           action (which cannot be C{None}). This may trigger an exception.
         """
+
+        def execute_and_refresh(collector):
+            d = collector.execute(action, vs, rs)
+            # We refresh only if the result is not None (action has been executed)
+            # We don't alter the original result
+            d.addBoth(lambda x: x is not None and
+                      collector.collect(vs, rs) and x or x)
+            return d
+
+        # No write community, no actions
+        if self.wcommunity is None:
+            return None
+
+        # Otherwise, get a proxy, find a collector and get things done
         d = self.getProxy()
         d.addCallback(lambda x: self.findCollector())
-        d.addCallback(lambda x: x.actions(vs, rs))
+        if action is None:
+            d.addCallback(lambda x: x.actions(vs, rs))
+        else:
+            d.addCallback(lambda x: execute_and_refresh(x))
         d.addBoth(lambda x: self.releaseProxy() and x or x)
         return d

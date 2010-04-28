@@ -379,9 +379,11 @@ class KeepalivedCollector(GenericCollector):
         return
 
     @defer.deferredGenerator
-    def actions(self, vs=None, rs=None):
+    def actions(self, vs=None, rs=None, action=None):
         """
-        List possible actions. Actions are possible on a real server only.
+        List possible actions.
+
+        Actions are possible on a real server only.
 
         Check if the weight of the real server is 0 or not and propose
         disable or enable. Enabling can be done with different
@@ -393,22 +395,53 @@ class KeepalivedCollector(GenericCollector):
             return
         try:
             d = defer.waitForDeferred(
-                self.proxy.get((self.oids['realServerWeight'], r)))
+                self.proxy.get((self.oids['realServerWeight'], v, r)))
             yield d
             d.getResult()
         except:
             # No weight, this is a sorry server
             yield {}
             return
-        if self.cache(('realServerWeight', r)) == 0:
+        if self.cache(('realServerWeight', v, r)) == 0:
             results = {'enable': 'Enable'}
-            for weight in range(1,6):
-                results['enable%d' % weight: 'Enable with weight %d' % weight]
+            for weight in range(2,6):
+                results['enable%d' % weight] = 'Enable with weight %d' % weight
             yield results
             return
         else:
             yield {'disable': 'Disable'}
             return
+
+    @defer.deferredGenerator
+    def execute(self, action, vs=None, rs=None):
+        """
+        Execute an action.
+
+        @param action: action to be executed
+        """
+        v, r = self.parse(vs, rs)
+        if r is None:
+            yield None
+            return
+        if action == "disable":
+            d = defer.waitForDeferred(
+                self.proxy.set((self.oids['realServerWeight'], v, r), 0))
+            yield d
+            d.getResult()
+            yield True
+            return
+        mo = re.match(r"enable(\d)*", action)
+        if mo:
+            weight = mo.group(1)
+            weight = weight is not None and int(weight) or 1
+            d = defer.waitForDeferred(
+                self.proxy.set((self.oids['realServerWeight'], v, r), weight))
+            yield d
+            d.getResult()
+            yield True
+            return
+        yield None
+        return
 
 class KeepalivedCollectorFactory:
     implements(ICollectorFactory, IPlugin)

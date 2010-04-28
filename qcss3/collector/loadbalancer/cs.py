@@ -313,7 +313,15 @@ class ArrowOrCsCollector(GenericCollector):
 
         On this equipment, there is no possible action for now.
         """
-        return defer.succeed({})
+        return {}
+
+    def execute(self, action, vs=None, rs=None):
+        """
+        Execute an action.
+
+        No action are possible on this equipment
+        """
+        return None
 
 class ArrowCollector(ArrowOrCsCollector):
     """

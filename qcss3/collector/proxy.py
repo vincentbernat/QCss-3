@@ -38,6 +38,7 @@ class AgentProxy(WalkAgentProxy):
       - GET, GETBULK, GETNEXT
       - WALK
       - cache results
+      - SET with a different proxy
 
     Each operation can an OID or a list of OID. Each OID can be a
     string or a tuple. In this case, the tuple elements will be
@@ -51,6 +52,12 @@ class AgentProxy(WalkAgentProxy):
 
     def __init__(self, *args, **kwargs):
         self._cache = {}
+        self._wproxy = None     # Write proxy
+        if "wcommunity" in kwargs:
+            self._wcommunity = kwargs["wcommunity"]
+            del kwargs["wcommunity"]
+        else:
+            self._wcommunity = None
         return WalkAgentProxy.__init__(self, *args, **kwargs)
 
     def _normalize_oid(f):
@@ -115,6 +122,22 @@ class AgentProxy(WalkAgentProxy):
                     r.append(None)
             return r
         return self._really_cache(oid[0])
+
+    @_normalize_oid
+    def set(self, *args, **kwargs):
+        """
+        Set a value using SNMP SET.
+
+        A specific proxy is used for this operation since we need a
+        different community. This operation is only available if we
+        have a write community.
+        """
+        if self._wcommunity is None:
+            raise TypeError("no write community is defined")
+        if self._wproxy is None:
+            # We should instiante a write proxy
+            self._wproxy = WalkAgentProxy(self.ip, self._wcommunity, self.version)
+        return self._wproxy.set(*args, **kwargs)
 
     get     = _cache_results(_normalize_oid(WalkAgentProxy.get))
     getnext = _cache_results(_normalize_oid(WalkAgentProxy.getnext))

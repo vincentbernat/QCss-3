@@ -545,17 +545,24 @@ fireexception:
 static PyObject*
 Snmp_op(SnmpObject *self, PyObject *args, int op)
 {
-	PyObject *roid, *oids, *item, *deferred = NULL, *req = NULL;
+	PyObject *roid, *oids, *item, *deferred = NULL, *req = NULL,
+		*rwvalue, *wvalues = NULL, *setobject;
 	char *aoid, *next;
 	oid poid[MAX_OID_LEN];
 	struct snmp_pdu *pdu=NULL;
 	int maxrepetitions = 10, norepeaters = 0;
-	int i, oidlen, reqid;
+	int i, oidlen, reqid, type;
 	size_t arglen;
+	u_char *buffer;
+	long long_ret;
+	ssize_t bufsize;
 
 	if (op == SNMP_MSG_GETBULK) {
 		if (!PyArg_ParseTuple(args, "O|ii",
 			&roid, &maxrepetitions, &norepeaters))
+			return NULL;
+	} else if (op == SNMP_MSG_SET) {
+		if (!PyArg_ParseTuple(args, "OO", &roid, &rwvalue))
 			return NULL;
 	} else {
 		if (!PyArg_ParseTuple(args, "O", &roid))
@@ -577,6 +584,42 @@ Snmp_op(SnmpObject *self, PyObject *args, int op)
 	} else {
 		oids = roid;
 		Py_INCREF(oids);
+	}
+
+	/* For SET, the second argument is the list of values to set */
+	if (op == SNMP_MSG_SET) {
+		if (!PyTuple_Check(rwvalue) && !PyList_Check(rwvalue) && \
+		    !PyString_Check(rwvalue) && !PyLong_Check(rwvalue) && \
+		    !PyInt_Check(rwvalue)) {
+			PyErr_SetString(PyExc_TypeError,
+					"second argument should be int, string, "
+					"list or tuple");
+			Py_DECREF(oids);
+			return NULL;
+		}
+		if (PyString_Check(rwvalue) || PyLong_Check(rwvalue) || \
+		    PyInt_Check(rwvalue)) {
+			if ((wvalues = PyTuple_Pack(1, rwvalue)) == NULL) {
+				Py_DECREF(oids);
+				return NULL;
+			}
+		} else if (PyList_Check(rwvalue)) {
+			if ((wvalues = PyList_AsTuple(rwvalue)) == NULL) {
+				Py_DECREF(oids);
+				return NULL;
+			}
+		} else {
+			wvalues = rwvalue;
+			Py_INCREF(wvalues);
+		}
+		if (PyTuple_Size(oids) != PyTuple_Size(wvalues)) {
+			PyErr_SetString(PyExc_ValueError,
+					"first and second arguments must be of "
+					"the same size");
+			Py_DECREF(wvalues);
+			Py_DECREF(oids);
+			return NULL;
+		}
 	}
 	
 	Py_INCREF(self);
@@ -612,7 +655,35 @@ Snmp_op(SnmpObject *self, PyObject *args, int op)
 			}
 			aoid = next;
 		}
-		snmp_add_null_var(pdu, poid, oidlen);
+		if (op == SNMP_MSG_SET) {
+			if ((setobject = PyTuple_GetItem(wvalues, i)) == NULL)
+				goto operror;
+			if (!PyInt_Check(setobject) &&		\
+			    !PyLong_Check(setobject) &&	\
+			    !PyString_Check(setobject)) {
+				PyErr_Format(PyExc_TypeError,
+				    "element %d shoud be int or str", i);
+				goto operror;
+			}
+			/* Copy in buffer */
+			if (PyInt_Check(setobject) || PyLong_Check(setobject)) {
+				type = ASN_INTEGER;
+				if ((long_ret = PyLong_AsLong(setobject)) == -1)
+					goto operror;
+				buffer = (u_char*)&long_ret;
+				bufsize = sizeof(long_ret);
+			} else {
+				type = ASN_OCTET_STR;
+				if ((buffer = (u_char*)
+					PyString_AsString(setobject)) == NULL)
+					goto operror;
+				bufsize = PyString_Size(setobject) + 1;
+			}
+			snmp_pdu_add_variable(pdu, poid, oidlen,
+			    type, buffer, bufsize);
+		} else {
+			snmp_add_null_var(pdu, poid, oidlen);
+		}
 	}
 	self->ss->callback = Snmp_handle;
 	self->ss->callback_magic = self;
@@ -625,6 +696,9 @@ Snmp_op(SnmpObject *self, PyObject *args, int op)
 		Snmp_invokeerrback(deferred);
 		Py_DECREF(self);
 		Py_DECREF(oids);
+		if (op == SNMP_MSG_SET) {
+			Py_DECREF(wvalues);
+		}
 		snmp_free_pdu(pdu);
 		return deferred;
 	}
@@ -642,12 +716,18 @@ Snmp_op(SnmpObject *self, PyObject *args, int op)
 	Py_DECREF(req);
 	if (Snmp_updatereactor() == -1)
 		goto operror;
+	if (op == SNMP_MSG_SET) {
+		Py_DECREF(wvalues);
+	}
 	Py_DECREF(oids);
 	return deferred;
 	
 operror:
 	Py_XDECREF(deferred);
 	Py_DECREF(self);
+	if (op == SNMP_MSG_SET) {
+		Py_DECREF(wvalues);
+	}
 	Py_DECREF(oids);
 	snmp_free_pdu(pdu);
 	return NULL;
@@ -669,6 +749,12 @@ static PyObject*
 Snmp_getbulk(PyObject *self, PyObject *args)
 {
 	return Snmp_op((SnmpObject*)self, args, SNMP_MSG_GETBULK);
+}
+
+static PyObject*
+Snmp_set(PyObject *self, PyObject *args)
+{
+	return Snmp_op((SnmpObject*)self, args, SNMP_MSG_SET);
 }
 
 static PyObject*
@@ -824,6 +910,8 @@ static PyMethodDef Snmp_methods[] = {
 	 METH_VARARGS, "Retrieve an OID value using GETNEXT"},
 	{"getbulk", Snmp_getbulk,
 	 METH_VARARGS, "Retrieve an OID value using GETBULK"},
+	{"set", Snmp_set,
+	 METH_VARARGS, "Set an OID value using SET"},
 	{NULL}  /* Sentinel */
 };
 

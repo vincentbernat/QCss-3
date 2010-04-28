@@ -455,6 +455,9 @@ class AlteonCollector(GenericCollector):
 
         @param action: action to be executed
         """
+        if action not in ["operenable", "enable", "disable", "operdisable"]:
+            yield None
+            return
         v, s, g, r = self.parse(vs, rs)
         if r is None:
             yield None

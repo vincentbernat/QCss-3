@@ -373,6 +373,8 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgVirtServiceUDPBalance', v, s),
             ('slbCurCfgRealServerWeight', r),
             ('slbVirtServicesInfoState', v, s, r),
+            ('slbCurCfgGroupRealServerState', g, r),
+            ('slbOperGroupRealServerState', g, r),
             ('slbRealServerInfoState', r),
             ('slbCurCfgRealServerPingInterval', r),
             ('slbCurCfgRealServerFailRetry', r),
@@ -400,6 +402,10 @@ class AlteonCollector(GenericCollector):
                 state = self.status[self.cache(('slbVirtServicesInfoState', v, s, r))]
             except KeyError:
                 state = 'disabled'
+            if state != "disabled" and \
+                tuple(self.cache(('slbOperGroupRealServerState', g, r),
+                                 ('slbCurCfgGroupRealServerState', g, r))) != (1,1):
+                state = "disabled"
             rs = RealServer(name, rip, rport, protocol, weight, state)
         else:
             state = self.status[self.cache(('slbRealServerInfoState', r))]

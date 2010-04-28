@@ -40,6 +40,8 @@ class F5LTMCollector(GenericCollector):
         'ltmPoolMemberWeight': '.1.3.6.1.4.1.3375.2.2.5.3.2.1.7',
         'ltmPoolMemberPriority': '.1.3.6.1.4.1.3375.2.2.5.3.2.1.8',
         'ltmPoolMemberDynamicRatio': '.1.3.6.1.4.1.3375.2.2.5.3.2.1.9',
+        'ltmPoolMemberSessionStatus': '.1.3.6.1.4.1.3375.2.2.5.3.2.1.13',
+        'ltmPoolMemberNewSessionEnable': '.1.3.6.1.4.1.3375.2.2.5.3.2.1.12',
         'ltmPoolMbrStatusAvailState': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.5',
         'ltmPoolMbrStatusEnabledState': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.6',
         'ltmPoolMbrStatusDetailReason': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.8',
@@ -171,12 +173,16 @@ class F5LTMCollector(GenericCollector):
 
         # No IPv6 virtual server
         if self.cache(('ltmVirtualServAddrType', ov)) != 1:
-            log.msg("In %r, unable to handle IPv6 virtual server %d, skip it" % (self.lb.name, v))
+            log.msg("In %r, unable to handle IPv6 virtual server %s, skip it" % (self.lb.name, v))
             yield None
             return
 
         # Get pool
         p = self.cache(('ltmVirtualServDefaultPool', ov))
+        if not p:
+            log.msg("In %r, no pool for %s, skip it" % (self.lb.name, v))
+            yield None
+            return
         op = str2oid(p)
         oids = []
         for o in self.oids:
@@ -272,9 +278,11 @@ class F5LTMCollector(GenericCollector):
         yield protocol
         protocol = protocol.getResult()
         weight = self.cache(('ltmPoolMemberWeight', op, 1, orip, port))
-        avail, enabled = self.cache(('ltmPoolMbrStatusAvailState', op, 1, orip, port),
-                                    ('ltmPoolMbrStatusEnabledState', op, 1, orip, port))
-        if self.enabledstates[enabled] != "enabled":
+        avail, enabled, session = self.cache(
+            ('ltmPoolMbrStatusAvailState', op, 1, orip, port),
+            ('ltmPoolMbrStatusEnabledState', op, 1, orip, port),
+            ('ltmPoolMemberSessionStatus', op, 1, orip, port))
+        if session != 1 or self.enabledstates[enabled] != "enabled":
             state = "disabled"
         else:
             state = self.availstates[avail]
@@ -304,21 +312,63 @@ class F5LTMCollector(GenericCollector):
             break
         return
 
+    @defer.deferredGenerator
     def actions(self, vs=None, rs=None):
         """
         List possible actions.
-
-        On F5, there is no possible action for now.
         """
-        return {}
+        v, rip, port = self.parse(vs, rs)
+        if rip is None:
+            yield {}
+            return
 
+        # Get pool
+        ov = str2oid(v)
+        orip = str2oid(socket.inet_aton(rip))
+        p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        yield p
+        p = p.getResult()
+        op = str2oid(p)
+
+        # Get new session status
+        d = defer.waitForDeferred(
+            self.cache_or_get(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)))
+        yield d
+        status = d.getResult()
+        if status == 1:
+            yield {'disable': 'Disable'}
+            return
+        yield {'enable': 'Enable'}
+
+    @defer.deferredGenerator
     def execute(self, action, vs=None, rs=None):
         """
         Execute an action.
-
-        On F5, there is no action to execute yet.
         """
-        return None
+        if action not in ["enable", "disable"]:
+            yield None
+            return
+        v, rip, port = self.parse(vs, rs)
+        if rip is None:
+            yield {}
+            return
+
+        # Get pool
+        ov = str2oid(v)
+        orip = str2oid(socket.inet_aton(rip))
+        p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        yield p
+        p = p.getResult()
+        op = str2oid(p)
+
+        d = defer.waitForDeferred(
+            self.proxy.set((self.oids['ltmPoolMemberNewSessionEnable'],
+                            op, 1, orip, port),
+                           action == "enable" and 1 or 0))
+        yield d
+        d.getResult()
+        yield True
+        return
 
 class F5LTMCollectorFactory:
     implements(ICollectorFactory, IPlugin)

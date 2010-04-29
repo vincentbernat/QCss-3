@@ -341,7 +341,7 @@ class F5LTMCollector(GenericCollector):
         yield {'enable': 'Enable'}
 
     @defer.deferredGenerator
-    def execute(self, action, vs=None, rs=None):
+    def execute(self, action, actionargs=None, vs=None, rs=None):
         """
         Execute an action.
         """

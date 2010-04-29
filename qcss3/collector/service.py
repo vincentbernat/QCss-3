@@ -54,7 +54,7 @@ class CollectorService(service.Service):
                                                        self.dbpool))
         return d
 
-    def actions(self, lb, vs=None, rs=None, action=None):
+    def actions(self, lb, vs=None, rs=None, action=None, actionargs=None):
         """
         Give the list of available actions or execute one.
 
@@ -62,9 +62,10 @@ class CollectorService(service.Service):
         @param vs: virtual server
         @param rs: real server
         @param action: action to execute or C{None} to get a list
+        @param actionargs: additional arguments for an action
         """
         d = self.get_collector(lb)
-        d.addCallback(lambda collector: collector.actions(vs, rs, action))
+        d.addCallback(lambda collector: collector.actions(vs, rs, action, actionargs))
         return d
 
     def refresh(self, lb=None, vs=None, rs=None):
@@ -242,13 +243,14 @@ class LoadBalancerCollector:
         return d
 
 
-    def actions(self, vs=None, rs=None, action=None):
+    def actions(self, vs=None, rs=None, action=None, actionargs=None):
         """
         Give the list of actions for LB or execute one
 
         @param vs: if specified, list only for the specified virtual server
         @param rs: if specified, list only for the specified real server
         @param action: if specified, the action to execute
+        @param actionargs: additional arguments for an action
 
         @return: if action is C{None}, a list of actions. Otherwise,
            C{None} if the action did not exist or the result of the
@@ -256,7 +258,7 @@ class LoadBalancerCollector:
         """
 
         def execute_and_refresh(collector):
-            d = collector.execute(action, vs, rs)
+            d = collector.execute(action, actionargs, vs, rs)
             # We refresh only if the result is not None (action has
             # been executed) We don't alter the original result. Don't
             # refresh a whole load balancer.

@@ -315,7 +315,7 @@ class ArrowOrCsCollector(GenericCollector):
         """
         return {}
 
-    def execute(self, action, vs=None, rs=None):
+    def execute(self, action, actionargs=None, vs=None, rs=None):
         """
         Execute an action.
 

@@ -5,6 +5,8 @@ Action related pages
 from twisted.internet import defer
 from twisted.python import log
 
+from nevow import inevow
+
 from qcss3.web.timetravel import IPastDate
 from qcss3.web.json import JsonPage
 from qcss3.web.refresh import RefreshMixIn
@@ -98,7 +100,14 @@ class ActionExecuteResource(JsonPage, RefreshMixIn):
         self.rs = rs
         self.sorry = sorry
         self.action = action
+        self.args = None
+
+    def locateChild(self, ctx, segments):
+        # Ignore additional segments but remember them
+        self.args = segments[:-1] or None
+        return self, ()
 
     @RefreshMixIn.exist
     def data_json(self, ctx, data):
-        return self.collector.actions(self.lb, self.vs, self.rs, self.action)
+        return self.collector.actions(self.lb, self.vs, self.rs,
+                                      self.action, self.args)

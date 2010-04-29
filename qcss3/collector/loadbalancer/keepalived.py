@@ -402,18 +402,22 @@ class KeepalivedCollector(GenericCollector):
             # No weight, this is a sorry server
             yield {}
             return
-        if self.cache(('realServerWeight', v, r)) == 0:
-            results = {'enable': 'Enable'}
-            for weight in range(2,6):
-                results['enable%d' % weight] = 'Enable with weight %d' % weight
-            yield results
-            return
-        else:
-            yield {'disable': 'Disable'}
-            return
+        curweight = self.cache(('realServerWeight', v, r))
+        results = {}
+        for weight in range(0, 6):
+            if weight == curweight:
+                continue
+            if weight == 0:
+                results['disable'] = 'Disable'
+            else:
+                results['enable/%d' % weight] = \
+                    curweight == 0 and 'Enable with weight %d' % weight or \
+                    'Set weight to %d' % weight
+        yield results
+        return
 
     @defer.deferredGenerator
-    def execute(self, action, vs=None, rs=None):
+    def execute(self, action, actionargs=None, vs=None, rs=None):
         """
         Execute an action.
 
@@ -430,10 +434,11 @@ class KeepalivedCollector(GenericCollector):
             d.getResult()
             yield True
             return
-        mo = re.match(r"enable(\d)*", action)
-        if mo:
-            weight = mo.group(1)
-            weight = weight is not None and int(weight) or 1
+        if action == "enable":
+            try:
+                weight = int(actionargs[0])
+            except ValueError, KeyError:
+                weight = 1
             d = defer.waitForDeferred(
                 self.proxy.set((self.oids['realServerWeight'], v, r), weight))
             yield d

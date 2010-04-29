@@ -31,13 +31,15 @@ class ICollector(Interface):
            description
         """
 
-    def execute(action, vs=None, rs=None):
+    def execute(action, actionargs=None, vs=None, rs=None):
         """
         Execute an action
 
         @param action: action to execute. This action should be in the
             list of possible actions as returned by L{actions};
             however, this is not mandatory.
+        @param actionargs: optional arguments for the action; those
+            arguments may be just ignored
         @param vs: if specified, execute action for this virtual server
         @param rs: if specified, execute action for this real server
 

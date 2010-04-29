@@ -70,6 +70,8 @@ class AlteonCollector(GenericCollector):
         'agApplyPending': '.1.3.6.1.4.1.1872.2.5.1.1.8.1.0',
         # GSLB stuff
         'gslbCurCfgRuleState': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.2.1.2',
+        'gslbCurCfgMetricMetric': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.5.1.3',
+        'gslbNewCfgMetricMetric': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.6.1.3',
         }
 
     kind = "AAS"
@@ -189,6 +191,23 @@ class AlteonCollector(GenericCollector):
         161: "script62",
         162: "script63",
         163: "script64",
+        }
+    metrics = {
+        1: "leastconns",
+        2: "roundrobin",
+        3: "response",
+        4: "geographical",
+        5: "network",
+        6: "random",
+        7: "availability",
+        8: "qos",
+        9: "minmisses",
+        10: "hash",
+        11: "local",
+        12: "always",
+        13: "remote",
+        14: "none",
+        15: "persistence",
         }
 
     def parse(self, vs=None, rs=None):
@@ -471,15 +490,67 @@ class AlteonCollector(GenericCollector):
         v, s, g, r = self.parse(vs, rs)
         if v is None and r is None and action == "rule":
             # GSLB stuff
-            rules = []
-            d = defer.waitForDeferred(
-                self.proxy.walk((self.oids['gslbCurCfgRuleState'],)))
-            yield d
-            d.getResult()
-            for rule in self.cache('gslbCurCfgRuleState'):
-                if self.cache(('gslbCurCfgRuleState', rule)) == 1:
-                    rules.append(rule)
-            yield rules
+            if not actionargs:
+                # Return rules
+                rules = []
+                d = defer.waitForDeferred(
+                    self.proxy.walk((self.oids['gslbCurCfgRuleState'],)))
+                yield d
+                d.getResult()
+                for rule in self.cache('gslbCurCfgRuleState'):
+                    if self.cache(('gslbCurCfgRuleState', rule)) == 1:
+                        rules.append(rule)
+                yield rules
+                return
+            if len(actionargs) < 2 or actionargs[1] != "metric":
+                yield None
+                return
+            try:
+                rule = int(actionargs[0])
+            except ValueError:
+                yield None
+                return
+            if len(actionargs) == 2:
+                # Return metrics
+                d = defer.waitForDeferred(
+                    self.proxy.walk((self.oids['gslbCurCfgMetricMetric'],
+                                     rule)))
+                yield d
+                metrics = {}
+                for index in self.cache(('gslbCurCfgMetricMetric', rule)):
+                    metrics[index] = self.metrics[
+                        self.cache(('gslbCurCfgMetricMetric', rule, index))]
+                yield metrics
+                return
+            index = int(actionargs[2])
+            if len(actionargs) == 3:
+                # Return one metric
+                d = defer.waitForDeferred(
+                    self.cache_or_get(('gslbCurCfgMetricMetric', rule, index)))
+                yield d
+                yield self.metrics[d.getResult()]
+                return
+            if len(actionargs) == 4:
+                # Modify metric
+                try:
+                    newmetric = [k
+                                 for k in self.metrics
+                                 if self.metrics[k] == actionargs[3]][0]
+                except KeyError:
+                    yield None
+                    return
+                d = defer.waitForDeferred(
+                    self.proxy.set((self.oids['gslbNewCfgMetricMetric'],
+                                    rule, index), newmetric))
+                yield d
+                d.getResult()
+                d = defer.waitForDeferred(self._apply())
+                yield d
+                d.getResult()
+                yield True
+                return
+            # No possible actions
+            yield None
             return
         if r is None:
             yield None
@@ -496,29 +567,37 @@ class AlteonCollector(GenericCollector):
             d.getResult()
             yield True
             return
-        elif action == "enable" or action == "disable":
-            d = self.proxy.set((self.oids['slbNewCfgGroupRealServerState'], g, r),
-                                action == "enable" and 1 or 2)
-            d = defer.waitForDeferred(d)
-            yield d
-            d.getResult()
-            d = defer.waitForDeferred(
-                self.proxy.get([self.oids['agApplyPending'],
-                                self.oids['agApplyConfig']]))
-            yield d
-            d.getResult()
-            if self.cache(('agApplyPending',)) == 2: # apply needed
-                if self.cache(('agApplyConfig',)) == 4: # complete
-                    d = self.proxy.set((self.oids['agApplyConfig']), 2) # idle
-                    d = defer.waitForDeferred(d)
-                    yield d
-                    d.getResult()
-                d = self.proxy.set((self.oids['agApplyConfig']), 1) # apply
+        d = self.proxy.set((self.oids['slbNewCfgGroupRealServerState'], g, r),
+                            action == "enable" and 1 or 2)
+        d = defer.waitForDeferred(d)
+        yield d
+        d.getResult()
+        d = defer.waitForDeferred(self._apply())
+        yield d
+        d.getResult()
+        yield True
+        return
+
+    @defer.deferredGenerator
+    def _apply(self):
+        """
+        Apply new configuration
+        """
+        d = defer.waitForDeferred(
+            self.proxy.get([self.oids['agApplyPending'],
+                            self.oids['agApplyConfig']]))
+        yield d
+        d.getResult()
+        if self.cache(('agApplyPending',)) == 2: # apply needed
+            if self.cache(('agApplyConfig',)) == 4: # complete
+                d = self.proxy.set((self.oids['agApplyConfig']), 2) # idle
                 d = defer.waitForDeferred(d)
                 yield d
                 d.getResult()
-            yield True
-            return
+            d = self.proxy.set((self.oids['agApplyConfig']), 1) # apply
+            d = defer.waitForDeferred(d)
+            yield d
+            d.getResult()
 
 class AlteonCollectorFactory:
     implements(ICollectorFactory, IPlugin)

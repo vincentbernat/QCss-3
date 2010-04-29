@@ -253,6 +253,7 @@ class MetaClient(object):
             for lb in lbs:
                 if lb in self.newloadbalancers[date]:
                     self.newloadbalancers[date][lb].append(service)
+                    self.newloadbalancers[date][lb].sort()
                 else:
                     self.newloadbalancers[date][lb] = [service]
             self.updated[date] = time.time()

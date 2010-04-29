@@ -68,6 +68,8 @@ class AlteonCollector(GenericCollector):
         # Apply
         'agApplyConfig': '.1.3.6.1.4.1.1872.2.5.1.1.8.2.0',
         'agApplyPending': '.1.3.6.1.4.1.1872.2.5.1.1.8.1.0',
+        # GSLB stuff
+        'gslbCurCfgRuleState': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.2.1.2',
         }
 
     kind = "AAS"
@@ -231,6 +233,8 @@ class AlteonCollector(GenericCollector):
         """
         # Retrieve all data
         for oid in self.oids:
+            if not oid.startswith("slb"):
+                continue
             w = defer.waitForDeferred(self.proxy.walk(self.oids[oid]))
             yield w
             w.getResult()
@@ -453,13 +457,34 @@ class AlteonCollector(GenericCollector):
         """
         Execute an action.
 
+        Possible actions are:
+         - operenable/operdisable
+         - enable/disable
+         - rule (GSLB)
+
+        GSLB stuff is a secret action. It is not advertised as a
+        possible action in L{actions} (because this action is
+        parametrized).
+
         @param action: action to be executed
         """
-        if action not in ["operenable", "enable", "disable", "operdisable"]:
+        v, s, g, r = self.parse(vs, rs)
+        if v is None and r is None and action == "rule":
+            # GSLB stuff
+            rules = []
+            d = defer.waitForDeferred(
+                self.proxy.walk((self.oids['gslbCurCfgRuleState'],)))
+            yield d
+            d.getResult()
+            for rule in self.cache('gslbCurCfgRuleState'):
+                if self.cache(('gslbCurCfgRuleState', rule)) == 1:
+                    rules.append(rule)
+            yield rules
+            return
+        if r is None:
             yield None
             return
-        v, s, g, r = self.parse(vs, rs)
-        if r is None:
+        if action not in ["operenable", "enable", "disable", "operdisable"]:
             yield None
             return
         d = None

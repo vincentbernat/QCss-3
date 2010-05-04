@@ -357,10 +357,10 @@ class AlteonCollector(GenericCollector):
         if backup:
             # We need to retrieve corresponding real servers.
             try:
-                g = defer.waitForDeferred(
+                gr = defer.waitForDeferred(
                     self.cache_or_get(('slbCurCfgGroupRealServers', backup)))
-                yield g
-                g.getResult()
+                yield gr
+                gr.getResult()
             except:
                 log.msg("In %r, %s has an inexistant backup group %d" % (self.lb.name,
                                                                          index, backup))

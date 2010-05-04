@@ -5,7 +5,8 @@ Past handling resources
 import re
 from zope.interface import Interface
 from twisted.python import log
-from nevow import rend, tags as T, loaders
+from nevow import rend, flat, tags as T, loaders
+from nevow import inevow
 
 class IPastDate(Interface):
     """Remember a past date for time travel"""
@@ -83,7 +84,7 @@ class PastResource(rend.Page):
 
     def badDate(self, ctx, date):
         log.msg("Got bad date: %r" % date)
-        return self.main
+        return UnknownDate()
 
     def childFactory(self, ctx, date):
         # We must validate the date (use runOperation to avoid proxy)
@@ -93,3 +94,16 @@ class PastResource(rend.Page):
                        lambda x: self.badDate(ctx, date))
         return d
 
+
+class UnknownDate(rend.Page):
+    """
+    400 error page for an unknown date
+    """
+    addSlash = True
+    docFactory = loaders.stan(T.html [ T.body [ T.h1 [ "Bad request" ],
+                                                T.p [ "Unknown date" ] ] ])
+
+    def locateChild(self, ctx, segments):
+        request = inevow.IRequest(ctx)
+        request.setResponseCode(400)
+        return self, ()

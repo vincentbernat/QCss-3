@@ -2,6 +2,7 @@
 Main service for collector
 """
 
+import time
 import socket
 
 from twisted.internet import defer
@@ -25,17 +26,38 @@ class CollectorService(service.Service):
         self.dbpool = dbpool
         self.setName("SNMP collector")
         self.inprogress = {}
+        self.cachedcollectors = {}
         AgentProxy.use_getbulk = self.config.get("bulk", True)
 
-    def get_collector(self, lb):
+    def get_collector(self, lb, caching=False):
         """
-        Get a collector for the given load balancer
+        Get a collector for the given load balancer.
+
+        This method support caching collectors. A cached collector is
+        only shared between codes requesting a cached collector.
 
         @param lb: name of the load balancer
+        @param caching: if C{True}, may return a cached collector
         @return: a L{LoadBalancerCollector} (deferred)
         """
         if lb not in self.config.get("lb", {}):
             raise UnknownLoadBalancer, "%s is not not a known loadbalancer" % lb
+
+        # Cache
+        clbs = self.cachedcollectors.keys()[:]
+        for clb in clbs:
+            _, age = self.cachedcollectors[clb]
+            if time.time() - age > 10:
+                del self.cachedcollectors[clb]
+        if caching:
+            if lb in self.cachedcollectors:
+                lb, _ = self.cachedcollectors[lb]
+                # See below for why we do this
+                d = defer.Deferred()
+                lb.addCallbacks(lambda x: d.callback(x) and x or x,
+                                lambda x: d.errback(x) and x or x)
+                return d
+
         # Communities
         community = self.config.get("lb", {})[lb]
         if type(community) is list:
@@ -52,6 +74,17 @@ class CollectorService(service.Service):
                                                        community, wcommunity,
                                                        self.config,
                                                        self.dbpool))
+
+        # Cache handling
+        if caching:
+            # We don't store the deferred as is because we need to
+            # keep its result. We create a new deferred that will be
+            # triggered when we get our result.
+            dd = defer.Deferred()
+            d.addCallbacks(lambda x: dd.callback(x) and x or x,
+                           lambda x: dd.errback(x) and x or x)
+            self.cachedcollectors[lb] = (dd, time.time())
+
         return d
 
     def actions(self, lb, vs=None, rs=None, action=None, actionargs=None):
@@ -68,13 +101,14 @@ class CollectorService(service.Service):
         d.addCallback(lambda collector: collector.actions(vs, rs, action, actionargs))
         return d
 
-    def refresh(self, lb=None, vs=None, rs=None):
+    def refresh(self, lb=None, vs=None, rs=None, caching=False):
         """
         Refresh the specified LB or a subset of it
 
         @param lb: loadbalancer name
         @param vs: if specified, the index of the virtual server
         @param rs: if specified, the index of the real server
+        @param caching: may reuse an existing collector (with its own existing cache!)
 
         If the name of the loadbalancer is not specified, each load
         balancer is refreshed.
@@ -108,7 +142,7 @@ class CollectorService(service.Service):
 
         d = defer.succeed(lb)
         for alb in lbs:
-            d.addCallback(lambda _, alb: self.get_collector(alb), alb)
+            d.addCallback(lambda _, alb: self.get_collector(alb, caching), alb)
             d.addCallback(lambda collector: collector.refresh(vs, rs))
             if lb is None:
                 # Don't raise an exception if we are refreshing all load balancers
@@ -157,6 +191,7 @@ class LoadBalancerCollector:
         self.config = config
         self.dbpool = dbpool
         self.proxy = None
+        self.collector = None
         self.description = None
 
     def getProxy(self):
@@ -167,6 +202,8 @@ class LoadBalancerCollector:
 
         @return: a proxy
         """
+        if self.proxy is not None:
+            return defer.succeed(self.proxy)
         proxy = AgentProxy(ip=self.ip,
                            community=self.community,
                            wcommunity=self.wcommunity,
@@ -191,6 +228,9 @@ class LoadBalancerCollector:
     @defer.deferredGenerator
     def findCollector(self):
         """Find the plugin that will handle the load balancer"""
+        if self.collector is not None:
+            yield self.collector
+            return
         plugins = []
         for plugin in getPlugins(ICollectorFactory,
                                  qcss3.collector.loadbalancer):
@@ -209,23 +249,15 @@ class LoadBalancerCollector:
         else:
             raise NoPlugin, "No plugin available for %s" % self.lb
         self.proxy.version = 2  # Switch to version 2
-        yield plugins[0].buildCollector(self.config, self.proxy,
-                                        self.lb, self.description)
+        self.collector = plugins[0].buildCollector(self.config, self.proxy,
+                                                   self.lb, self.description)
+        yield self.collector
         return
 
     def writeData(self, data, vs=None, rs=None):
         if data is not None:
             return self.dbpool.runInteraction(IDatabaseWriter(data).write,
                                               [a for a in [self.lb, vs, rs] if a])
-
-    def releaseProxy(self):
-        """
-        Release the proxy
-
-        @return: C{None}
-        """
-        del self.proxy
-        return None
 
     def refresh(self, vs=None, rs=None):
         """
@@ -238,8 +270,6 @@ class LoadBalancerCollector:
         d.addCallback(lambda x: self.findCollector())
         d.addCallback(lambda x: x.collect(vs, rs))
         d.addCallback(lambda x: self.writeData(x, vs, rs))
-        d.addCallbacks(lambda x: self.releaseProxy(),
-                       lambda x: self.releaseProxy() or x)
         return d
 
 
@@ -278,5 +308,4 @@ class LoadBalancerCollector:
             d.addCallback(lambda x: x.actions(vs, rs))
         else:
             d.addCallback(lambda x: execute_and_refresh(x))
-        d.addBoth(lambda x: self.releaseProxy() and x or x)
         return d

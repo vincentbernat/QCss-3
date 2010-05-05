@@ -136,7 +136,7 @@ class ArrowOrCsCollector(GenericCollector):
         Parse vs and rs into owner, content, rs
         """
         if vs is not None:
-            mo = re.match(r"(.*)|(.*)", vs)
+            mo = re.match(r"(.*)\|(.*)", vs)
             if not mo:
                 raise ValueError("%r is not a valid virtual server" % vs)
             owner, content = mo.groups()
@@ -153,7 +153,7 @@ class ArrowOrCsCollector(GenericCollector):
         if owner is not None:
             if rs is not None:
                 # Collect data to refresh a specific real server
-                d = self.process_rs(rs)
+                d = self.process_rs(owner, content, rs, None)
             else:
                 # Collect data to refresh a virtual server
                 d = self.process_vs(owner, content)
@@ -234,7 +234,7 @@ class ArrowOrCsCollector(GenericCollector):
             services.getResult()
         for r in self.cache(('apCntsvcSvcName', oowner, ocontent)):
             service = oid2str(r)
-            rs = defer.waitForDeferred(self.process_rs(service))
+            rs = defer.waitForDeferred(self.process_rs(owner, content, service))
             yield rs
             rs = rs.getResult()
             if rs is not None:
@@ -245,7 +245,7 @@ class ArrowOrCsCollector(GenericCollector):
             service = self.cache(('apCnt%sSorryServer' % backup.capitalize(),
                                   oowner, ocontent))
             if not service: continue
-            rs = defer.waitForDeferred(self.process_rs(service, backup))
+            rs = defer.waitForDeferred(self.process_rs(owner, content, service, backup))
             yield rs
             rs = rs.getResult()
             if rs is not None:
@@ -255,12 +255,13 @@ class ArrowOrCsCollector(GenericCollector):
         return
 
     @defer.deferredGenerator
-    def process_rs(self, service, backup=False):
+    def process_rs(self, owner, content, service, backup=False):
         """
         Process data for a given virtual server and real server.
 
         @param service: service name
         @param backup: C{False} or a string representing backup position
+           C{None} is we don't know if it is a backup or not
 
         @return: a deferred C{IRealServer} or None
         """
@@ -274,6 +275,22 @@ class ArrowOrCsCollector(GenericCollector):
         c = defer.waitForDeferred(self.cache_or_get(*oids))
         yield c
         c.getResult()
+
+        # Is it a backup?
+        if backup is None:
+            oowner = str2oid(owner)
+            ocontent = str2oid(content)
+            for b in ["primary", "second"]:
+                s = defer.waitForDeferred(
+                    self.cache_or_get(('apCnt%sSorryServer' % b.capitalize(),
+                                       oowner, ocontent)))
+                yield s
+                s = s.getResult()
+                if s and s == service:
+                    backup = b
+                    break
+            if backup is None:
+                backup = False
 
         # Build the real server
         rip = self.cache(('apSvcIPAddress', oservice))

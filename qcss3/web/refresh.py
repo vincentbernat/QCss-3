@@ -29,7 +29,7 @@ class RefreshMixIn:
         if vs:
             return age < 300
         if lb:
-            return age < 300
+            return age < 1800
         return True
 
     @classmethod

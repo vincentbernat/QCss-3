@@ -220,23 +220,23 @@ class AlteonCollector(GenericCollector):
                 raise ValueError("%r is not a valid virtual server" % vs)
             v, s, g = int(mo.group(1)), int(mo.group(2)), int(mo.group(3))
             if rs is not None:
-                mo = re.match(r"[rb](\d+)", rs)
+                mo = re.match(r"([rb])(\d+)", rs)
                 if not mo:
                     raise ValueError("%r is not a valid real server" % rs)
-                r = int(mo.group(1))
-                return v, s, g, r
-            return v, s, g, None
-        return None, None, None, None
+                r = int(mo.group(2))
+                return v, s, g, r, mo.group(1) == "b"
+            return v, s, g, None, None
+        return None, None, None, None, None
 
     def collect(self, vs=None, rs=None):
         """
         Collect data for an Alteon
         """
-        v, s, g, r = self.parse(vs, rs)
+        v, s, g, r, backup = self.parse(vs, rs)
         if v is not None:
             if r is not None:
                 # Collect data to refresh a specific real server
-                d = self.process_rs(v, s, g, r)
+                d = self.process_rs(v, s, g, r, backup)
             else:
                 # Collect data to refresh a virtual server
                 d = self.process_vs(v, s, g)
@@ -451,7 +451,10 @@ class AlteonCollector(GenericCollector):
         Possible actions are enable/disable and operenable/operdisable.
         """
         results = {}
-        v, s, g, r = self.parse(vs, rs)
+        v, s, g, r, backup = self.parse(vs, rs)
+        if backup is True:
+            yield {}
+            return
         if r is None:
             yield {}
             return
@@ -487,7 +490,10 @@ class AlteonCollector(GenericCollector):
 
         @param action: action to be executed
         """
-        v, s, g, r = self.parse(vs, rs)
+        v, s, g, r, backup = self.parse(vs, rs)
+        if backup is True:
+            yield None
+            return
         if v is None and r is None and action == "rule":
             # GSLB stuff
             if not actionargs:

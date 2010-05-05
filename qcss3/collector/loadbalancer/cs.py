@@ -153,7 +153,7 @@ class ArrowOrCsCollector(GenericCollector):
         if owner is not None:
             if rs is not None:
                 # Collect data to refresh a specific real server
-                d = self.process_rs(owner, content, rs)
+                d = self.process_rs(rs)
             else:
                 # Collect data to refresh a virtual server
                 d = self.process_vs(owner, content)

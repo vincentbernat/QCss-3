@@ -22,7 +22,7 @@ class PastConnectionPool:
     date).
     """
 
-    _regexp = re.compile(r"(?:(\w+)\.|)deleted='infinity'")
+    _regexp = re.compile(r"(?:(\w+)\.|)deleted\s*=\s*'infinity'")
 
     def __init__(self, orig):
         self._orig = orig

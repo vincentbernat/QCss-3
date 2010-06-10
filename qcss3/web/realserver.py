@@ -5,16 +5,23 @@ Realserver related pages
 from qcss3.web.json import JsonPage
 from qcss3.web.refresh import RefreshResource, RefreshMixIn
 from qcss3.web.action import ActionMixIn
+from qcss3.web.common import IApiVersion
 
 class RealOrSorryServerResource(JsonPage, RefreshMixIn):
     """
     Give the list of real servers or sorry servers
 
-    For example::
+    For example (1.0 API)::
        {"r1":["fofo02wb","up"],
         "r2":["fofo03wb","up"],
         "r3":["fofo04wb","disabled"],
         "r4":["fofo05wb","down"]}
+
+    Or (1.1 API)::
+       {"r1":["fofo02wb", "172.16.100.80", 80, "up"],
+        "r2":["fofo03wb", "172.16.100.81", 80, "up"],
+        "r3":["fofo04wb", "172.16.100.83", 80, "disabled"],
+        "r4":["fofo05wb", "172.16.100.84", 80, "down"]}
     
     When the virtual server does not exist or the load balancer does
     not exist, the list is empty.
@@ -35,7 +42,7 @@ class RealOrSorryServerResource(JsonPage, RefreshMixIn):
     @RefreshMixIn.fresh
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
-SELECT rs.rs, rs.name, rs.rstate
+SELECT rs.rs, rs.name, rs.rip, rs.port, rs.rstate
 FROM realserver rs
 WHERE rs.deleted = 'infinity'
 AND rs.lb = %%(lb)s
@@ -44,13 +51,16 @@ AND %s rs.sorry
 """ % (not self.sorry and "NOT" or ""),
                                        {'lb': self.lb,
                                         'vs': self.vs})
-        d.addCallback(self.format_json)
+        d.addCallback(self.format_json, IApiVersion(ctx))
         return d
 
-    def format_json(self, data):
+    def format_json(self, data, version):
         result = {}
-        for rs, name, rstate in data:
-            result[rs] = [name, rstate]
+        for rs, name, rip, port, rstate in data:
+            if version == "1.0":
+                result[rs] = [name, rstate]
+            else:
+                result[rs] = [name, rip, port, rstate]
         return result
 
 class RealServerResource(RealOrSorryServerResource):

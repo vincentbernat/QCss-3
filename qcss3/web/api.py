@@ -16,7 +16,7 @@ class ApiResource(rend.Page):
     """
 
     addSlash = True
-    versions = [ "1.0" ]        # Valid versions
+    versions = [ "1.0", "1.1" ]        # Valid versions
     docFactory = loaders.stan(T.html [ T.body [ T.p [ "Valid versions are:" ],
                                    T.ul [ [ T.li[v] for v in versions ] ] ] ])
 

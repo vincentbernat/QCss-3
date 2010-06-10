@@ -6,6 +6,7 @@ from nevow import rend, loaders, tags as T
 
 from qcss3.web.timetravel import IPastDate
 from qcss3.web.json import JsonPage
+from qcss3.web.common import IApiVersion
 
 class MetaSearchResource(rend.Page):
     addSlash = True
@@ -40,6 +41,6 @@ class MetaSearchGenericResource(JsonPage):
             date = ctx.locate(IPastDate)
         except KeyError:
             date = None
-        d = self.client.get_all(date, "search", self.term)
+        d = self.client.get_all(IApiVersion(ctx), date, "search", self.term)
         d.addCallback(process)
         return d

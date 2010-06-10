@@ -17,6 +17,7 @@ from twisted.web import client as twclient
 from nevow import json, inevow, rend
 
 from qcss3.web.timetravel import IPastDate
+from qcss3.web.common import IApiVersion
 
 class ClientError(Exception):
     pass
@@ -71,17 +72,18 @@ class MetaClient(object):
         self.updated = {}       # Last time updated
         self.refreshing = {}
 
-    def get(self, service, timeout, date, *requests):
+    def get(self, service, api, timeout, date, *requests):
         """
         Request a page from a remote service.
 
         @param service: URL of remote service to use
+        @param api: API version to use
         @param timeout: timeout to use; this timeout is used both for
            TCP connection and for HTTP. Therefore, it is better to
            specify a short one or to use the default ones. 0 does not
            disable the timeouts but will make use the default ones.
         @param date: date of request (None if no date)
-        @param request: request to issue (without prefix /api/1.0/ and without suffix /)
+        @param request: request to issue (without prefix /api/XXX/ and without suffix /)
         @return: a tuple containing the data, the status code and the content-type
         """
 
@@ -105,11 +107,11 @@ class MetaClient(object):
 
         if date is not None:
             requests = ["past", date] + list(requests)
-        url = '%s/api/1.0/%s/' % (service,
+        url = '%s/api/%s/%s/' % (service, api,
                                   "/".join([urllib.quote(r, '') for r in requests]))
         return getPage(url)
 
-    def get_all(self, date, *requests):
+    def get_all(self, api, date, *requests):
         """
         Request a page from all remote services. In parallel. JSON only.
 
@@ -119,6 +121,7 @@ class MetaClient(object):
         something fails, we can add another remote service to this
         set.
 
+        @param api: API version to use
         @param date: if not C{None}, try in the past
         @param requests: request to issue
         @return: list of data
@@ -148,7 +151,7 @@ class MetaClient(object):
                 yield d
 
         def queryService(service, services, failedservices, lbs):
-            d = self.get(service, 0, date, *requests)
+            d = self.get(service, api, 0, date, *requests)
             d.addCallbacks(lambda x, service: process(x, service),
                            lambda x, service: reschedule(service,
                                                          services, failedservices,
@@ -260,7 +263,7 @@ class MetaClient(object):
 
         def doWork(services, date):
             for service in services:
-                d = self.get(service, self.timeout, date, "loadbalancer")
+                d = self.get(service, "1.0", self.timeout, date, "loadbalancer")
                 d.addCallbacks(lambda x, service: add(service, date, x),
                                lambda x, service:
                                    log.msg("service %s is unavailable (%s)" % (service,
@@ -350,7 +353,7 @@ class ProxyResource(rend.Page):
                 return nogateway()
 
             d = defer.succeed(None)
-            d.addCallback(lambda x: self.client.get(services[0], 0,
+            d.addCallback(lambda x: self.client.get(services[0], IApiVersion(ctx), 0,
                                                     date, "loadbalancer",
                                                     self.lb, *segments))
             d.addCallbacks(lambda x: process(x, services[0]),

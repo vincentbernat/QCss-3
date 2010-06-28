@@ -140,10 +140,10 @@ class AgentProxy(WalkAgentProxy):
         return self._wproxy.set(*args, **kwargs)
 
     get     = _cache_results(_normalize_oid(WalkAgentProxy.get))
-    getnext = _cache_results(_normalize_oid(WalkAgentProxy.getnext))
-    getbulk = _cache_results(_normalize_oid(WalkAgentProxy.getbulk))
-    walk    = _normalize_oid(WalkAgentProxy.walk)
-    # walk cache is done through getbulk
+    # getbulk and getnext are not cached because we could cache results that we don't want
+    getnext = _normalize_oid(WalkAgentProxy.getnext)
+    getbulk = _normalize_oid(WalkAgentProxy.getbulk)
+    walk    = _cache_results(_normalize_oid(WalkAgentProxy.walk))
         
 class Walker(object):
     """SNMP walker class"""

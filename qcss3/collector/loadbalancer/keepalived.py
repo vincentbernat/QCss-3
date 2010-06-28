@@ -223,7 +223,7 @@ class KeepalivedCollector(GenericCollector):
                         for o in self.oids:
                             if o.startswith('virtualServerGroupMember'):
                                 groups = defer.waitForDeferred(self.proxy.walk(
-                                        self.oids[o]))
+                                        "%s.%s" % (self.oids[o], g)))
                                 yield groups
                                 groups.getResult()
 

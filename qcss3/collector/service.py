@@ -288,13 +288,20 @@ class LoadBalancerCollector:
         """
 
         def execute_and_refresh(collector):
+            def refresh(x):
+                if x is None:
+                    # No refresh is action has failed
+                    return x
+                d = collector.collect(vs, rs)
+                d.addCallback(lambda y: self.writeData(y, vs, rs))
+                d.addBoth(lambda _: x)
+                return d
             d = collector.execute(action, actionargs, vs, rs)
             # We refresh only if the result is not None (action has
             # been executed) We don't alter the original result. Don't
             # refresh a whole load balancer.
             if vs is not None or rs is not None:
-                d.addBoth(lambda x: x is not None and
-                          collector.collect(vs, rs) and x or x)
+                d.addBoth(lambda x: refresh(x))
             return d
 
         # No write community, no actions

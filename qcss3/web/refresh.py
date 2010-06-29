@@ -134,7 +134,7 @@ WHERE name=%(lb)s
 AND deleted='infinity'
 """,
                                          {'lb': lb})
-            d.addCallback(lambda x: len(x) > 0 and x[0][0] or None)
+            d.addCallback(lambda x: len(x) > 0 and (x[0][0] + 1) or None)
             return d
         # No resource specified, age is maximum
         return int(time.time())

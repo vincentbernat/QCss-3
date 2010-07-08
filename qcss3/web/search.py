@@ -99,6 +99,20 @@ WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'
 """
 
+class SearchIpInVirtualServer(SearchIn):
+    """
+    Search the term in C{virtualserver} table as an IP.
+    """
+
+    def query(self):
+        return """
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
+FROM virtualserver
+WHERE deleted='infinity'
+AND (vip = %(term)s
+ OR  vip ILIKE %(term)s||':%%')
+"""
+
 class SearchInRealServer(SearchIn):
     """
     Search the term in C{realserver} table (name, rip).
@@ -126,6 +140,19 @@ WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'
 """
 
+class SearchIpInRealServer(SearchIn):
+    """
+    Search the term in C{realserver} table as an IP.
+    """
+
+    def query(self):
+        return """
+SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
+FROM realserver
+WHERE deleted='infinity'
+AND rip = %(term)s
+"""
+
 class SearchGenericResource(JsonPage):
     """
     Generic search handler.
@@ -141,6 +168,10 @@ class SearchGenericResource(JsonPage):
         SearchInRealServer,
         SearchInRealServerExtra,
         ]
+    iphandlers = [
+        SearchIpInVirtualServer,
+        SearchIpInRealServer,
+        ]
 
     def __init__(self, dbpool, term):
         self.term = term
@@ -152,8 +183,15 @@ class SearchGenericResource(JsonPage):
         List through the search handlers to output JSon data
         """
         l = []
-        for s in self.handlers:
+        handlers = None
+        try:
+            socket.inet_ntoa(socket.inet_aton(self.term))
+            handlers = self.iphandlers
+        except:
+            handlers = self.handlers
+        for s in handlers:
             l.append(s(self.dbpool, self.term).search(ctx))
+
         d = defer.DeferredList(l, consumeErrors=True)
         d.addCallback(self.flattenList)
         return d

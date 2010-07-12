@@ -408,11 +408,11 @@ class KeepalivedCollector(GenericCollector):
             if weight == curweight:
                 continue
             if weight == 0:
-                results['disable'] = 'Disable'
+                results['disable'] = 'Disable (temporary)'
             else:
                 results['enable/%d' % weight] = \
-                    curweight == 0 and 'Enable with weight %d' % weight or \
-                    'Set weight to %d' % weight
+                    curweight == 0 and 'Enable with weight %d (temporary)' % weight or \
+                    'Set weight to %d (temporary)' % weight
         yield results
         return
 

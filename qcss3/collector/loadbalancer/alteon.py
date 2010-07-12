@@ -464,13 +464,13 @@ class AlteonCollector(GenericCollector):
         yield d
         d.getResult()
         if self.cache(('slbOperGroupRealServerState', g, r)) == 1:
-            results["operdisable"] = "Disable (oper)"
+            results["operdisable"] = "Disable (temporary)"
         else:
-            results["operenable"] = "Enable (oper)"
+            results["operenable"] = "Enable (temporary)"
         if self.cache(('slbCurCfgGroupRealServerState', g, r)) == 1:
-            results["disable"] = "Disable"
+            results["disable"] = "Disable (permanent)"
         else:
-            results["enable"] = "Enable"
+            results["enable"] = "Enable (permanent)"
         yield results
         return
 

@@ -336,9 +336,9 @@ class F5LTMCollector(GenericCollector):
         yield d
         status = d.getResult()
         if status == 1:
-            yield {'disable': 'Disable'}
+            yield {'disable': 'Disable (permanent)'}
             return
-        yield {'enable': 'Enable'}
+        yield {'enable': 'Enable (permanent)'}
 
     @defer.deferredGenerator
     def execute(self, action, actionargs=None, vs=None, rs=None):

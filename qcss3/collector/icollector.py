@@ -19,25 +19,11 @@ class ICollector(Interface):
             C{IVirtualServer}, C{IRealServer} or C{ISorryServer}.
         """
 
-    def actions(vs=None, rs=None):
-        """
-        Indicate which actions are possible
-
-        @param vs: if specified, return actions possible for this virtual server
-        @param rs: if specified, return actions possible for this real server
-        @param action: if specified, action to execute
-
-        @return: a mapping between possible actions and their
-           description
-        """
-
     def execute(action, actionargs=None, vs=None, rs=None):
         """
         Execute an action
 
-        @param action: action to execute. This action should be in the
-            list of possible actions as returned by L{actions};
-            however, this is not mandatory.
+        @param action: action to execute.
         @param actionargs: optional arguments for the action; those
             arguments may be just ignored
         @param vs: if specified, execute action for this virtual server

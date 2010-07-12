@@ -372,48 +372,22 @@ class KeepalivedCollector(GenericCollector):
             rs.extra["on fail"] = \
                 self.cache(('realServerActionWhenDown', v, r)) == 1 and "remove" or \
                 "inhibit"
+            # Actions
+            if self.proxy.writable:
+                curweight = self.cache(('realServerWeight', v, r))
+                for weight in range(0, 6):
+                    if weight == curweight:
+                        continue
+                    if weight == 0:
+                        rs.actions['disable'] = 'Disable (temporary)'
+                    else:
+                        rs.actions['enable/%d' % weight] = \
+                            curweight == 0 and 'Enable with weight %d (temporary)' % weight or \
+                            'Set weight to %d (temporary)' % weight
         else:
             # Sorry server, not much information
             rs = SorryServer(name, rip, rport, protocol, "up")
         yield rs
-        return
-
-    @defer.deferredGenerator
-    def actions(self, vs=None, rs=None, action=None):
-        """
-        List possible actions.
-
-        Actions are possible on a real server only.
-
-        Check if the weight of the real server is 0 or not and propose
-        disable or enable. Enabling can be done with different
-        weights.
-        """
-        v, r = self.parse(vs, rs)
-        if r is None:
-            yield {}
-            return
-        try:
-            d = defer.waitForDeferred(
-                self.proxy.get((self.oids['realServerWeight'], v, r)))
-            yield d
-            d.getResult()
-        except:
-            # No weight, this is a sorry server
-            yield {}
-            return
-        curweight = self.cache(('realServerWeight', v, r))
-        results = {}
-        for weight in range(0, 6):
-            if weight == curweight:
-                continue
-            if weight == 0:
-                results['disable'] = 'Disable (temporary)'
-            else:
-                results['enable/%d' % weight] = \
-                    curweight == 0 and 'Enable with weight %d (temporary)' % weight or \
-                    'Set weight to %d (temporary)' % weight
-        yield results
         return
 
     @defer.deferredGenerator

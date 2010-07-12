@@ -67,6 +67,7 @@ DROP TABLE IF EXISTS virtualserver CASCADE;
 DROP TABLE IF EXISTS virtualserver_extra CASCADE;
 DROP TABLE IF EXISTS realserver CASCADE;
 DROP TABLE IF EXISTS realserver_extra CASCADE;
+DROP TABLE IF EXISTS action CASCADE;
 
 CREATE TABLE loadbalancer (
   name    text		   NOT NULL,
@@ -175,6 +176,18 @@ WHERE EXISTS (SELECT 1 FROM realserver_extra
 DO INSTEAD UPDATE realserver_extra SET deleted='infinity'
       	      WHERE lb=new.lb AND vs=new.vs AND rs=new.rs AND key=new.key
 	      AND value=new.value AND deleted=CURRENT_TIMESTAMP::abstime;
+
+-- This table is not indexed by time. We could use foreign keys but
+-- with little added value. We prefer to not use it for consistency.
+CREATE TABLE action (
+  lb          text      NOT NULL,
+  vs          text      NULL,
+  rs          text      NULL,
+  action      text      NOT NULL,
+  label       text      NOT NULL,
+  PRIMARY KEY (lb, vs, rs, action)
+);
+CREATE INDEX action_lb_vs_rs ON action (lb, vs, rs);
 
 -- Special rules to propagate updates. These rules should work when
 -- port or equipment `deleted' column is set from infinity to

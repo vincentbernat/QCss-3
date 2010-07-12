@@ -24,7 +24,26 @@ class IDatabaseWriter(Interface):
         @param id: unique id to use for the entity (if needed)
         """
 
-class LoadBalancerWriter:
+class ActionWriterMixIn:
+
+    def write_actions(self, txn, actions, lb, vs=None, rs=None):
+        """Write actions to `action' table.
+
+        @param txn: transaction to use to write actions to database
+        @param actions: actions to write
+        @param lb: loadbalancer
+        @param vs: virtual server
+        @param rs: real server
+        """
+        txn.execute("DELETE FROM action WHERE lb=%(lb)s AND vs=%(vs)s AND rs=%(rs)s",
+                    {'lb': lb, 'vs': vs, 'rs': rs})
+        for key in actions:
+            txn.execute("INSERT INTO action VALUES "
+                        "(%(lb)s, %(vs)s, %(rs)s, %(key)s, %(value)s)",
+                        { 'lb': lb, 'vs': vs, 'rs': rs, 'key': key,
+                          'value': actions[key] })
+
+class LoadBalancerWriter(ActionWriterMixIn):
     implements(IDatabaseWriter)
 
     def __init__(self, loadbalancer):
@@ -50,8 +69,9 @@ class LoadBalancerWriter:
                 virtualservers[virtualserver]).write(txn,
                                                      (self.loadbalancer.name,
                                                       virtualserver))
+        self.write_actions(txn, self.loadbalancer.actions, self.loadbalancer.name)
 
-class VirtualServerWriter:
+class VirtualServerWriter(ActionWriterMixIn):
     implements(IDatabaseWriter)
 
     def __init__(self, virtualserver):
@@ -90,8 +110,9 @@ class VirtualServerWriter:
             IDatabaseWriter(
                 realservers[realserver]).write(txn,
                                                (lb, vs, realserver))
+        self.write_actions(txn, self.virtualserver.actions, lb, vs)
 
-class RealOrSorryServerWriter:
+class RealOrSorryServerWriter(ActionWriterMixIn):
     implements(IDatabaseWriter)
 
     def __init__(self, realserver):
@@ -133,6 +154,7 @@ class RealOrSorryServerWriter:
                         "(%(lb)s, %(vs)s, %(rs)s, %(key)s, %(value)s)",
                         { 'lb': lb, 'vs': vs, 'rs': rs, 'key': key,
                           'value': self.realserver.extra[key] })
+        self.write_actions(txn, self.realserver.actions, lb, vs, rs)
 
 components.registerAdapter(
     LoadBalancerWriter,

@@ -16,6 +16,7 @@ class ILoadBalancer(Interface):
     description = Attribute('Description of this equipment')
 
     extra = Attribute('Extra attributes (as a mapping)')
+    actions = Attribute('Possible actions (as a mapping)')
     virtualservers = Attribute('Virtual servers for this equipment (as a mapping)')
 
 class LoadBalancer:
@@ -27,6 +28,7 @@ class LoadBalancer:
         self.description = description
         self.extra = {}
         self.virtualservers = {}
+        self.actions = {}
 
 class IVirtualServer(Interface):
     """Interface for object containing the description of a virtual server"""
@@ -37,6 +39,7 @@ class IVirtualServer(Interface):
     mode = Attribute('Load balancing mode of this virtual server')
 
     extra = Attribute('Extra attributes (as a mapping)')
+    actions = Attribute('Possible actions (as a mapping)')
     realservers = Attribute("Real servers for this virtual server (as a mapping)")
 
 class VirtualServer:
@@ -49,6 +52,7 @@ class VirtualServer:
         self.mode = mode
         self.extra = {}
         self.realservers = {}
+        self.actions = {}
 
 class ISorryOrRealServer(Interface):
     """
@@ -69,6 +73,7 @@ class ISorryOrRealServer(Interface):
     protocol = Attribute('Protocol of this real/sorry server')
     state = Attribute('State of this real/sorry server (unknown/up/down/disabled)')
     extra = Attribute('Extra attributes (as a mapping)')
+    actions = Attribute('Possible actions (as a mapping)')
 
 class ISorryServer(ISorryOrRealServer):
     """
@@ -92,6 +97,7 @@ class SorryServer:
         self.protocol = protocol
         self.state = state
         self.extra = {}
+        self.actions = {}
 
 class RealServer:
     implements(IRealServer)
@@ -104,3 +110,4 @@ class RealServer:
         self.weight = weight
         self.state = state
         self.extra = {}
+        self.actions = {}

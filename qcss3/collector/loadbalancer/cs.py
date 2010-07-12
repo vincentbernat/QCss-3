@@ -324,14 +324,6 @@ class ArrowOrCsCollector(GenericCollector):
         yield rs
         return
 
-    def actions(self, vs=None, rs=None):
-        """
-        List possible actions.
-
-        On this equipment, there is no possible action for now.
-        """
-        return {}
-
     def execute(self, action, actionargs=None, vs=None, rs=None):
         """
         Execute an action.

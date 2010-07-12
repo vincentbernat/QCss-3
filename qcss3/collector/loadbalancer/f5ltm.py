@@ -291,6 +291,12 @@ class F5LTMCollector(GenericCollector):
                                                   op, 1, orip, port))
         rs.extra["monitor rule"] = self.cache(('ltmPoolMemberMonitorRule',
                                                op, 1, orip, port))
+        # Actions
+        if self.proxy.writable:
+            if self.cache(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)) == 1:
+                rs.actions['disable'] = 'Disable (permanent)'
+            else:
+                rs.actions['enable'] = 'Enable (permanent)'
         yield rs
         return
 
@@ -311,34 +317,6 @@ class F5LTMCollector(GenericCollector):
             yield oid2str(k)
             break
         return
-
-    @defer.deferredGenerator
-    def actions(self, vs=None, rs=None):
-        """
-        List possible actions.
-        """
-        v, rip, port = self.parse(vs, rs)
-        if rip is None:
-            yield {}
-            return
-
-        # Get pool
-        ov = str2oid(v)
-        orip = str2oid(socket.inet_aton(rip))
-        p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
-        yield p
-        p = p.getResult()
-        op = str2oid(p)
-
-        # Get new session status
-        d = defer.waitForDeferred(
-            self.cache_or_get(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)))
-        yield d
-        status = d.getResult()
-        if status == 1:
-            yield {'disable': 'Disable (permanent)'}
-            return
-        yield {'enable': 'Enable (permanent)'}
 
     @defer.deferredGenerator
     def execute(self, action, actionargs=None, vs=None, rs=None):

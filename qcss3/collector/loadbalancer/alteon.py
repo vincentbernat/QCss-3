@@ -430,6 +430,16 @@ class AlteonCollector(GenericCollector):
                                  ('slbCurCfgGroupRealServerState', g, r))) != (1,1):
                 state = "disabled"
             rs = RealServer(name, rip, rport, protocol, weight, state)
+            # Actions
+            if self.proxy.writable:
+                if self.cache(('slbOperGroupRealServerState', g, r)) == 1:
+                    rs.actions["operdisable"] = "Disable (temporary)"
+                else:
+                    rs.actions["operenable"] = "Enable (temporary)"
+                if self.cache(('slbCurCfgGroupRealServerState', g, r)) == 1:
+                    rs.actions["disable"] = "Disable (permanent)"
+                else:
+                    rs.actions["enable"] = "Enable (permanent)"
         else:
             state = self.status[self.cache(('slbRealServerInfoState', r))]
             rs = SorryServer(name, rip, rport, protocol, state)
@@ -441,37 +451,6 @@ class AlteonCollector(GenericCollector):
                          'fail retry': fr,
                          'success retry': sr})
         yield rs
-        return
-
-    @defer.deferredGenerator
-    def actions(self, vs=None, rs=None):
-        """
-        List possible actions.
-
-        Possible actions are enable/disable and operenable/operdisable.
-        """
-        results = {}
-        v, s, g, r, backup = self.parse(vs, rs)
-        if backup is True:
-            yield {}
-            return
-        if r is None:
-            yield {}
-            return
-        d = defer.waitForDeferred(
-            self.proxy.get([(self.oids['slbOperGroupRealServerState'], g, r),
-                            (self.oids['slbCurCfgGroupRealServerState'], g, r)]))
-        yield d
-        d.getResult()
-        if self.cache(('slbOperGroupRealServerState', g, r)) == 1:
-            results["operdisable"] = "Disable (temporary)"
-        else:
-            results["operenable"] = "Enable (temporary)"
-        if self.cache(('slbCurCfgGroupRealServerState', g, r)) == 1:
-            results["disable"] = "Disable (permanent)"
-        else:
-            results["enable"] = "Enable (permanent)"
-        yield results
         return
 
     @defer.deferredGenerator

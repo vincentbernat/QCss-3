@@ -63,5 +63,23 @@ class Database:
         log.msg("unable to update database:\n%s" % str(fail))
         reactor.stop()
 
-#    def upgradeDatabase_01(self):
-#        """First upgrade function"""
+    def upgradeDatabase_01(self):
+        """add action table"""
+
+        def create(txn):
+            """Create action table and its indexes."""
+            txn.execute("""
+CREATE TABLE action (
+  lb          text      NOT NULL,
+  vs          text      NULL,
+  rs          text      NULL,
+  action      text      NOT NULL,
+  label       text      NOT NULL,
+  PRIMARY KEY (lb, vs, rs, action)
+)""")
+            txn.execute("CREATE INDEX action_lb_vs_rs ON action (lb, vs, rs)")
+
+        d = self.pool.runOperation("SELECT 1 FROM action LIMIT 1")
+        d.addCallbacks(lambda _: None,
+                       lambda _: self.pool.runInteraction(create))
+        return d

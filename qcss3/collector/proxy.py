@@ -58,6 +58,7 @@ class AgentProxy(WalkAgentProxy):
             del kwargs["wcommunity"]
         else:
             self._wcommunity = None
+        self.writable = self._wcommunity is not None
         return WalkAgentProxy.__init__(self, *args, **kwargs)
 
     def _normalize_oid(f):

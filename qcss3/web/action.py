@@ -58,14 +58,19 @@ class ActionMixIn:
                 # If not a dictionary, don't add anything
                 if type(x) is not dict:
                     return x
-                # Otherwise, retrive list of actions
+                # Otherwise, retrieve list of actions from database
+                params = {'lb': self.lb, 'rs': None, 'vs': None }
                 if hasattr(self, "rs"):
-                    d = self.collector.actions(self.lb, self.vs, self.rs)
-                elif hasattr(self, "vs"):
-                    d = self.collector.actions(self.lb, self.vs)
-                else:
-                    d = self.collector.actions(self.lb)
-                d.addCallbacks(lambda y: update(x, y),
+                    params["rs"] = self.rs
+                if hasattr(self, "vs"):
+                    params["vs"] = self.vs
+                d = self.dbpool.runQuery("""
+SELECT DISTINCT action, label FROM action
+WHERE lb = %(lb)s
+AND vs = %(vs)s
+AND rs = %(rs)s
+""", params)
+                d.addCallbacks(lambda y: update(x, dict(y)),
                                lambda e: error(x, e))
                 return d
 
@@ -109,5 +114,5 @@ class ActionExecuteResource(JsonPage, RefreshMixIn):
 
     @RefreshMixIn.exist
     def data_json(self, ctx, data):
-        return self.collector.actions(self.lb, self.vs, self.rs,
-                                      self.action, self.args)
+        return self.collector.actions(self.action, self.lb, self.vs, self.rs,
+                                      self.args)

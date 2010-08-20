@@ -110,7 +110,8 @@ SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
 FROM virtualserver
 WHERE deleted='infinity'
 AND (vip = %(term)s
- OR  vip ILIKE %(term)s||':%%')
+ OR  vip LIKE %(term)s||':%%'
+ OR  vip LIKE '%% '||%(term)s||':%%')
 """
 
 class SearchInRealServer(SearchIn):

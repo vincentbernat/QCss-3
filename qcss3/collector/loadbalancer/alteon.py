@@ -505,7 +505,7 @@ class AlteonCollector(GenericCollector):
                 for index in self.cache(('gslbCurCfgMetricMetric', rule)):
                     metrics[index] = self.metrics[
                         self.cache(('gslbCurCfgMetricMetric', rule, index))]
-                yield metrics
+                yield metrics.values()
                 return
             index = int(actionargs[2])
             if len(actionargs) == 3:

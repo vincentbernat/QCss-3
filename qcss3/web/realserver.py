@@ -57,7 +57,7 @@ AND %s rs.sorry
     def format_json(self, data, version):
         result = {}
         for rs, name, rip, port, rstate in data:
-            if version == "1.0":
+            if version == (1, 0):
                 result[rs] = [name, rstate]
             else:
                 result[rs] = [name, rip, port, rstate]

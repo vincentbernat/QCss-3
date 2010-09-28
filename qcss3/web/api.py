@@ -27,6 +27,7 @@ class ApiResource(rend.Page):
 
     def childFactory(self, ctx, version):
         if version in ApiResource.versions:
+            version = tuple([int(i) for i in version.split(".")])
             ctx.remember(version, IApiVersion)
             return self.api(*self.params)
         return None

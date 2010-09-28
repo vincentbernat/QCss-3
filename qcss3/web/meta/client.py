@@ -107,7 +107,7 @@ class MetaClient(object):
 
         if date is not None:
             requests = ["past", date] + list(requests)
-        url = '%s/api/%s/%s/' % (service, api,
+        url = '%s/api/%s/%s/' % (service, ".".join([str(x) for x in api]),
                                   "/".join([urllib.quote(r, '') for r in requests]))
         return getPage(url)
 
@@ -263,7 +263,7 @@ class MetaClient(object):
 
         def doWork(services, date):
             for service in services:
-                d = self.get(service, "1.0", self.timeout, date, "loadbalancer")
+                d = self.get(service, (1, 0), self.timeout, date, "loadbalancer")
                 d.addCallbacks(lambda x, service: add(service, date, x),
                                lambda x, service:
                                    log.msg("service %s is unavailable (%s)" % (service,

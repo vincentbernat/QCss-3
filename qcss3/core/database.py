@@ -83,3 +83,27 @@ CREATE TABLE action (
         d.addCallbacks(lambda _: None,
                        lambda _: self.pool.runInteraction(create))
         return d
+
+    def upgradeDatabase_02(self):
+        """add past tables"""
+
+        def addpast(txn):
+            for table in ["loadbalancer", "virtualserver", "virtualserver_extra",
+                          "realserver", "realserver_extra"]:
+                txn.execute("CREATE TABLE %s_past (LIKE %s)" % ((table,)*2))
+                # Create view
+                txn.execute("CREATE VIEW %s_full AS "
+                            "(SELECT * FROM %s UNION SELECT * FROM %s_past)" % ((table,)*3))
+                # Add index on `deleted'
+                txn.execute("CREATE INDEX %s_past_deleted ON %s_past (deleted)" % ((table,)*2))
+            # Primary keys
+            txn.execute("ALTER TABLE loadbalancer_past ADD PRIMARY KEY (name, deleted)")
+            txn.execute("ALTER TABLE virtualserver_past ADD PRIMARY KEY (lb, vs, deleted)")
+            txn.execute("ALTER TABLE virtualserver_extra_past ADD PRIMARY KEY (lb, vs, key, deleted)")
+            txn.execute("ALTER TABLE realserver_past ADD PRIMARY KEY (lb, vs, rs, deleted)")
+            txn.execute("ALTER TABLE realserver_extra_past ADD PRIMARY KEY (lb, vs, rs, key, deleted)")
+
+        d = self.pool.runOperation("SELECT 1 FROM loadbalancer_past LIMIT 1")
+        d.addCallbacks(lambda _: None,
+                       lambda _: self.pool.runInteraction(addpast))
+        return d

@@ -43,7 +43,7 @@ class RealOrSorryServerResource(JsonPage, RefreshMixIn):
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT rs.rs, rs.name, rs.rip, rs.port, rs.rstate
-FROM realserver rs
+FROM realserver_full rs
 WHERE rs.deleted = 'infinity'
 AND rs.lb = %%(lb)s
 AND rs.vs = %%(vs)s
@@ -135,7 +135,7 @@ class RealOrSorryServerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT rs.name, rs.rip, rs.port, rs.protocol, rs.weight, rs.rstate
-FROM realserver rs
+FROM realserver_full rs
 WHERE rs.lb = %%(lb)s
 AND rs.vs = %%(vs)s
 AND rs.rs = %%(rs)s
@@ -149,7 +149,7 @@ AND %s rs.sorry
         d.addCallback(lambda x:
                           self.dbpool.runQueryInPast(ctx, """
 SELECT rs.key, rs.value
-FROM realserver_extra rs
+FROM realserver_extra_full rs
 WHERE rs.deleted='infinity'
 AND rs.lb = %(lb)s
 AND rs.vs = %(vs)s

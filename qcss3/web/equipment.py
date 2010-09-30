@@ -24,7 +24,7 @@ class LoadBalancerResource(JsonPage):
 
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx,
-                                       "SELECT name FROM loadbalancer "
+                                       "SELECT name FROM loadbalancer_full "
                                        "WHERE deleted='infinity' "
                                        "ORDER BY name")
         d.addCallback(lambda x: [y[0] for y in x])
@@ -54,7 +54,7 @@ class LoadBalancerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT name, description, type
-FROM loadbalancer
+FROM loadbalancer_full
 WHERE name=%(name)s
 AND deleted='infinity'
 """,

@@ -44,6 +44,13 @@
 -- (this means UPDATE) then INSERT it. Evrything else should be done
 -- automatically, thanks to triggers.
 
+-- Each table have a _past counterpart that has the same schema but
+-- where deleted != 'infinity'. Each table has also a view _full which
+-- is the join of the table and the past table. To maintain PostgreSQL
+-- 8.1 compatibility, we need to copy indexes by hand (instead of
+-- using INCLUDING INDEXES). We don't include DEFAULTS because there
+-- is not direct insertion into past tables.
+
 -- The configuration of PostgreSQL should use UTF-8 messages. For example:
 -- lc_messages = 'en_US.UTF-8'
 -- lc_monetary = 'en_US.UTF-8'
@@ -63,10 +70,20 @@ DROP RULE IF EXISTS insert_virtualserver_extra ON virtualserver_extra;
 DROP RULE IF EXISTS insert_realserver ON realserver;
 DROP RULE IF EXISTS insert_realserver_extra ON realserver_extra;
 DROP TABLE IF EXISTS loadbalancer CASCADE;
+DROP TABLE IF EXISTS loadbalancer_past CASCADE;
+DROP VIEW IF EXISTS loadbalancer_full CASCADE;
 DROP TABLE IF EXISTS virtualserver CASCADE;
+DROP TABLE IF EXISTS virtualserver_past CASCADE;
+DROP VIEW IF EXISTS virtualserver_full CASCADE;
 DROP TABLE IF EXISTS virtualserver_extra CASCADE;
+DROP TABLE IF EXISTS virtualserver_extra_past CASCADE;
+DROP VIEW IF EXISTS virtualserver_extra_full CASCADE;
 DROP TABLE IF EXISTS realserver CASCADE;
+DROP TABLE IF EXISTS realserver_past CASCADE;
+DROP VIEW IF EXISTS realserver_full CASCADE;
 DROP TABLE IF EXISTS realserver_extra CASCADE;
+DROP TABLE IF EXISTS realserver_extra_past CASCADE;
+DROP VIEW IF EXISTS realserver_extra_full CASCADE;
 DROP TABLE IF EXISTS action CASCADE;
 
 CREATE TABLE loadbalancer (
@@ -85,6 +102,10 @@ WHERE EXISTS (SELECT 1 FROM loadbalancer
 DO INSTEAD UPDATE loadbalancer SET deleted='infinity', updated=CURRENT_TIMESTAMP::abstime
    	   WHERE name=new.name AND type=new.type
 	   AND deleted=CURRENT_TIMESTAMP::abstime;
+CREATE TABLE loadbalancer_past (LIKE loadbalancer);
+ALTER TABLE loadbalancer_past ADD PRIMARY KEY (name, deleted);
+CREATE INDEX loadbalancer_past_deleted ON loadbalancer_past (deleted);
+CREATE VIEW loadbalancer_full AS (SELECT * FROM loadbalancer UNION SELECT * FROM loadbalancer_past);
 
 CREATE TABLE virtualserver (
   lb          text	   NOT NULL,
@@ -107,6 +128,10 @@ DO INSTEAD UPDATE virtualserver SET deleted='infinity', updated=CURRENT_TIMESTAM
       	      WHERE lb=new.lb AND vs=new.vs AND name=new.name AND vip=new.vip
 	      AND protocol=new.protocol
 	      AND mode=new.mode AND deleted=CURRENT_TIMESTAMP::abstime;
+CREATE TABLE virtualserver_past (LIKE virtualserver);
+ALTER TABLE virtualserver_past ADD PRIMARY KEY (lb, vs, deleted);
+CREATE INDEX virtualserver_past_deleted ON virtualserver_past (deleted);
+CREATE VIEW virtualserver_full AS (SELECT * FROM virtualserver UNION SELECT * FROM virtualserver_past);
 
 CREATE TABLE virtualserver_extra (
   lb          text	   NOT NULL,
@@ -124,6 +149,10 @@ WHERE EXISTS (SELECT 1 FROM virtualserver_extra
 DO INSTEAD UPDATE virtualserver_extra SET deleted='infinity'
       	      WHERE lb=new.lb AND vs=new.vs AND key=new.key
 	      AND value=new.value AND deleted=CURRENT_TIMESTAMP::abstime;
+CREATE TABLE virtualserver_extra_past (LIKE virtualserver_extra);
+ALTER TABLE virtualserver_extra_past ADD PRIMARY KEY (lb, vs, key, deleted);
+CREATE INDEX virtualserver_extra_past_deleted ON virtualserver_extra_past (deleted);
+CREATE VIEW virtualserver_extra_full AS (SELECT * FROM virtualserver_extra UNION SELECT * FROM virtualserver_extra_past);
 
 CREATE TABLE realserver (
   lb          text	   NOT NULL,
@@ -158,6 +187,10 @@ DO INSTEAD UPDATE realserver SET deleted='infinity', updated=CURRENT_TIMESTAMP::
 	      AND (weight IS NULL AND new.weight IS NULL OR weight=new.weight)
 	      AND rstate=new.rstate AND sorry=new.sorry
 	      AND deleted=CURRENT_TIMESTAMP::abstime;
+CREATE TABLE realserver_past (LIKE realserver);
+ALTER TABLE realserver_past ADD PRIMARY KEY (lb, vs, rs, deleted);
+CREATE INDEX realserver_past_deleted ON realserver_past (deleted);
+CREATE VIEW realserver_full AS (SELECT * FROM realserver UNION SELECT * FROM realserver_past);
 
 CREATE TABLE realserver_extra (
   lb          text	   NOT NULL,
@@ -176,6 +209,10 @@ WHERE EXISTS (SELECT 1 FROM realserver_extra
 DO INSTEAD UPDATE realserver_extra SET deleted='infinity'
       	      WHERE lb=new.lb AND vs=new.vs AND rs=new.rs AND key=new.key
 	      AND value=new.value AND deleted=CURRENT_TIMESTAMP::abstime;
+CREATE TABLE realserver_extra_past (LIKE realserver_extra);
+ALTER TABLE realserver_extra_past ADD PRIMARY KEY (lb, vs, rs, key, deleted);
+CREATE INDEX realserver_extra_past_deleted ON realserver_extra_past (deleted);
+CREATE VIEW realserver_extra_full AS (SELECT * FROM realserver_extra UNION SELECT * FROM realserver_extra_past);
 
 -- This table is not indexed by time. We could use foreign keys but
 -- with little added value. We prefer to not use it for consistency.

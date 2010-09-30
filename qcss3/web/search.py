@@ -64,7 +64,7 @@ class SearchInLoadBalancer(SearchIn):
     def query(self):
        return """
 SELECT '/loadbalancer/' || name || '/'
-FROM loadbalancer
+FROM loadbalancer_full
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
  OR  description ILIKE '%%'||%(term)s||'%%'
@@ -79,7 +79,7 @@ class SearchInVirtualServer(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
-FROM virtualserver
+FROM virtualserver_full
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
  OR  vip ILIKE '%%'||%(term)s||'%%'
@@ -94,7 +94,7 @@ class SearchInVirtualServerExtra(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
-FROM virtualserver_extra
+FROM virtualserver_extra_full
 WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'
 """
@@ -107,7 +107,7 @@ class SearchIpInVirtualServer(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/'
-FROM virtualserver
+FROM virtualserver_full
 WHERE deleted='infinity'
 AND (vip = %(term)s
  OR  vip LIKE %(term)s||':%%'
@@ -122,7 +122,7 @@ class SearchInRealServer(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
-FROM realserver
+FROM realserver_full
 WHERE deleted='infinity'
 AND (name ILIKE '%%'||%(term)s||'%%'
  OR  rip::text ILIKE '%%'||%(term)s||'%%')
@@ -136,7 +136,7 @@ class SearchInRealServerExtra(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
-FROM realserver_extra
+FROM realserver_extra_full
 WHERE deleted='infinity'
 AND value ILIKE '%%'||%(term)s||'%%'
 """
@@ -149,7 +149,7 @@ class SearchIpInRealServer(SearchIn):
     def query(self):
         return """
 SELECT '/loadbalancer/' || lb || '/virtualserver/' || vs || '/realserver/' || rs || '/'
-FROM realserver
+FROM realserver_full
 WHERE deleted='infinity'
 AND rip = %(term)s
 """

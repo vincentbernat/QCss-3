@@ -22,7 +22,8 @@ class PastConnectionPool:
     date).
     """
 
-    _regexp = re.compile(r"(?:(\w+)\.|)deleted\s*=\s*'infinity'")
+    _regexp_deleted = re.compile(r"(?:(\w+)\.|)deleted\s*=\s*'infinity'")
+    _regexp_full = re.compile(r"\B_full\b")
 
     def __init__(self, orig):
         self._orig = orig
@@ -50,6 +51,8 @@ class PastConnectionPool:
         try:
             date = ctx.locate(IPastDate)
         except KeyError:
+            # No in the past
+            query = PastConnectionPool._regexp_full.sub("", query)
             if dic:
                 return self._orig.runQuery(query, dic)
             else:
@@ -59,7 +62,7 @@ class PastConnectionPool:
         if not dic:
             dic = {}
         dic["__date"] = date
-        q = PastConnectionPool._regexp.sub(
+        q = PastConnectionPool._regexp_deleted.sub(
             lambda x: convert(date, x), query)
         return self._orig.runQuery(q, dic)
 

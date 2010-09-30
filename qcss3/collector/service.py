@@ -149,7 +149,7 @@ class CollectorService(service.Service):
                 d.addErrback(lambda x, lb: log.msg(
                         "Error while exploring %s:\n%s" % (lb, x)), alb)
         if lb is None:
-            d.addCallback(lambda x: self.expire())
+            d.addCallback(lambda x: self.dbpool.runInteraction(self.expire))
 
         # Add our deferred to the list of refresh in progress and
         # remove it when everything is done.
@@ -157,18 +157,23 @@ class CollectorService(service.Service):
         d.addBoth(lambda x: self.inprogress.pop((lb, vs, rs), True) and x)
         return d
 
-    def expire(self):
+    def expire(self, txn):
         """
         Expire old load balancers that were not updated after a long time
         """
-        d = self.dbpool.runOperation("""
+        txn.execute("""
 UPDATE loadbalancer
 SET deleted=CURRENT_TIMESTAMP
 WHERE CURRENT_TIMESTAMP - interval '%(expire)s days' > updated
 AND deleted='infinity'
 """,
                                      {'expire': self.config.get("expire", 1)})
-        return d
+        # Move old entries to _past tables
+        for table in ["loadbalancer", "virtualserver", "virtualserver_extra",
+                      "realserver", "realserver_extra"]:
+            txn.execute("INSERT INTO %s_past "
+                        "SELECT * FROM %s WHERE deleted != 'infinity'" % ((table,)*2))
+            txn.execute("DELETE FROM %s WHERE deleted != 'infinity'" % table)
 
 class LoadBalancerCollector:
     """Service to collect data for a given load balancer"""

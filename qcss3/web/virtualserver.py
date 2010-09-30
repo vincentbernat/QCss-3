@@ -65,7 +65,7 @@ class VirtualServerResource(JsonPage, RefreshMixIn):
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT vs.vs, vs.name, vs.vip, rs.rstate
-FROM virtualserver vs, realserver rs
+FROM virtualserver_full vs, realserver_full rs
 WHERE vs.lb = %(lb)s
 AND rs.lb = vs.lb
 AND rs.vs = vs.vs
@@ -148,7 +148,7 @@ class VirtualServerDetailResource(ActionMixIn, JsonPage, RefreshMixIn):
     def data_json(self, ctx, data):
         d = self.dbpool.runQueryInPast(ctx, """
 SELECT vs.name, vs.vip, vs.protocol, vs.mode
-FROM virtualserver vs
+FROM virtualserver_full vs
 WHERE vs.lb = %(lb)s
 AND vs.vs = %(vs)s
 AND vs.deleted = 'infinity'
@@ -159,7 +159,7 @@ AND vs.deleted = 'infinity'
         d.addCallback(lambda x:
                           self.dbpool.runQueryInPast(ctx, """
 SELECT rs.rstate
-FROM realserver rs
+FROM realserver_full rs
 WHERE rs.deleted='infinity'
 AND rs.lb = %(lb)s
 AND rs.vs = %(vs)s
@@ -171,7 +171,7 @@ AND NOT rs.sorry
         d.addCallback(lambda x:
                           self.dbpool.runQueryInPast(ctx, """
 SELECT vs.key, vs.value
-FROM virtualserver_extra vs
+FROM virtualserver_extra_full vs
 WHERE vs.deleted='infinity'
 AND vs.lb = %(lb)s
 AND vs.vs = %(vs)s

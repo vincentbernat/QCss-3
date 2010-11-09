@@ -54,6 +54,7 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgRealServerFailRetry': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.8',
         'slbCurCfgRealServerSuccRetry': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.9',
         'slbCurCfgRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.10',
+        'slbNewCfgRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.3.1.10',
         'slbCurCfgRealServerName': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.12',
         'slbCurCfgGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.5.1.3',
         'slbNewCfgGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.6.1.3',
@@ -65,6 +66,7 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgRealServerBackUp': '.1.3.6.1.4.1.1872.2.5.4.1.1.2.2.1.6',
         # Oper
         'slbOperGroupRealServerState': '.1.3.6.1.4.1.1872.2.5.4.4.5.1.3',
+        'slbOperRealServerStatus': '.1.3.6.1.4.1.1872.2.5.4.4.1.1.2',
         # Apply
         'agApplyConfig': '.1.3.6.1.4.1.1872.2.5.1.1.8.2.0',
         'agApplyPending': '.1.3.6.1.4.1.1872.2.5.1.1.8.1.0',
@@ -398,7 +400,9 @@ class AlteonCollector(GenericCollector):
             ('slbVirtServicesInfoState', v, s, r),
             ('slbCurCfgGroupRealServerState', g, r),
             ('slbOperGroupRealServerState', g, r),
+            ('slbOperRealServerStatus', r),
             ('slbRealServerInfoState', r),
+            ('slbCurCfgRealServerState', r),
             ('slbCurCfgRealServerPingInterval', r),
             ('slbCurCfgRealServerFailRetry', r),
             ('slbCurCfgRealServerSuccRetry', r)))
@@ -427,7 +431,7 @@ class AlteonCollector(GenericCollector):
                 state = 'disabled'
             if state != "disabled" and \
                 tuple(self.cache(('slbOperGroupRealServerState', g, r),
-                                 ('slbCurCfgGroupRealServerState', g, r))) != (1,1):
+                                 ('slbOperRealServerStatus', r))) != (1,1):
                 state = "disabled"
             rs = RealServer(name, rip, rport, protocol, weight, state)
             # Actions
@@ -436,10 +440,18 @@ class AlteonCollector(GenericCollector):
                     rs.actions["operdisable"] = "Disable (temporary)"
                 else:
                     rs.actions["operenable"] = "Enable (temporary)"
+                if self.cache(('slbOperRealServerStatus', r)) == 1:
+                    rs.actions["operdisableall"] = "Disable globally (temporary)"
+                else:
+                    rs.actions["operenableall"] = "Enable globally (temporary)"
                 if self.cache(('slbCurCfgGroupRealServerState', g, r)) == 1:
                     rs.actions["disable"] = "Disable (permanent)"
                 else:
                     rs.actions["enable"] = "Enable (permanent)"
+                if self.cache(('slbCurCfgRealServerState', r)) == 2:
+                    rs.actions["disableall"] = "Disable globally (permanent)"
+                else:
+                    rs.actions["enableall"] = "Enable globally (permanent)"
         else:
             state = self.status[self.cache(('slbRealServerInfoState', r))]
             rs = SorryServer(name, rip, rport, protocol, state)
@@ -540,7 +552,8 @@ class AlteonCollector(GenericCollector):
         if r is None:
             yield None
             return
-        if action not in ["operenable", "enable", "disable", "operdisable"]:
+        if action not in ["operenable", "enable", "disable", "operdisable",
+                          "operenableall", "enableall", "disableall", "operdisableall"]:
             yield None
             return
         d = None
@@ -552,8 +565,20 @@ class AlteonCollector(GenericCollector):
             d.getResult()
             yield True
             return
-        d = self.proxy.set((self.oids['slbNewCfgGroupRealServerState'], g, r),
-                            action == "enable" and 1 or 2)
+        if action == "operenableall" or action == "operdisableall":
+            d = self.proxy.set((self.oids['slbOperRealServerStatus'], r),
+                                action == "operenableall" and 1 or 2)
+            d = defer.waitForDeferred(d)
+            yield d
+            d.getResult()
+            yield True
+            return
+        if action.endswith("all"):
+            d = self.proxy.set((self.oids['slbNewCfgRealServerState'], r),
+                               action == "enableall" and 2 or 3)
+        else:
+            d = self.proxy.set((self.oids['slbNewCfgGroupRealServerState'], g, r),
+                               action == "enable" and 1 or 2)
         d = defer.waitForDeferred(d)
         yield d
         d.getResult()

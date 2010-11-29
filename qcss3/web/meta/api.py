@@ -9,7 +9,7 @@ from qcss3.web.meta.client import MetaClient
 from qcss3.web.meta.past import MetaPastResource
 from qcss3.web.meta.loadbalancer import MetaLoadBalancerResource
 from qcss3.web.meta.search import MetaSearchResource
-from qcss3.web.meta.status import StatusResource
+from qcss3.web.meta.status import StatusResource, PingResource
 
 class MetaApiResource(rend.Page):
     """
@@ -41,3 +41,6 @@ class MetaApiResource(rend.Page):
 
     def child_status(self, ctx):
         return StatusResource(self.client)
+
+    def child_ping(self, ctx):
+        return PingResource(self.client)

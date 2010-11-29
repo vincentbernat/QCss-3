@@ -323,7 +323,7 @@ class F5LTMCollector(GenericCollector):
         """
         Execute an action.
         """
-        if action not in ["enable", "disable"]:
+        if action not in ["enable", "disable", "operenable", "operdisable"]:
             yield None
             return
         v, rip, port = self.parse(vs, rs)
@@ -342,7 +342,7 @@ class F5LTMCollector(GenericCollector):
         d = defer.waitForDeferred(
             self.proxy.set((self.oids['ltmPoolMemberNewSessionEnable'],
                             op, 1, orip, port),
-                           action == "enable" and 1 or 0))
+                           action.endswith("enable") and 1 or 0))
         yield d
         d.getResult()
         yield True

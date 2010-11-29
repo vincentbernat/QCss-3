@@ -49,7 +49,6 @@ class PingResource(JsonPage):
             pass
         result = {}
         loadbalancers = self.client.loadbalancers.get(None, {})
-        print loadbalancers
         for service in self.client.services:
             # Is the service attached to a load balancer?
             for lb in loadbalancers:

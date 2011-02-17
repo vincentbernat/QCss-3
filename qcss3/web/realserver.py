@@ -153,7 +153,7 @@ FROM realserver_extra_full rs
 WHERE rs.deleted='infinity'
 AND rs.lb = %(lb)s
 AND rs.vs = %(vs)s
-AND rs.rs = %(vs)s
+AND rs.rs = %(rs)s
 """,
                                        {'lb': self.lb,
                                         'vs': self.vs,

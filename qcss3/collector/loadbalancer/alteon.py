@@ -42,9 +42,11 @@ class AlteonCollector(GenericCollector):
         'slbCurCfgVirtServiceRealPort': '.1.3.6.1.4.1.1872.2.5.4.1.1.4.5.1.5',
         'slbCurCfgVirtServiceHname': '.1.3.6.1.4.1.1872.2.5.4.1.1.4.5.1.7',
         'slbCurCfgVirtServiceUDPBalance': '.1.3.6.1.4.1.1872.2.5.4.1.1.4.5.1.6',
+        'slbCurCfgVirtServicePBind': '.1.3.6.1.4.1.1872.2.5.4.1.1.4.5.1.16',
         # Groups
         'slbCurCfgGroupMetric': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.3',
         'slbCurCfgGroupName':  '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.8',
+        'slbCurCfgGroupHealthUrl': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.6',
         'slbCurCfgGroupHealthCheckLayer': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.7',
         'slbCurCfgGroupRealServers': '.1.3.6.1.4.1.1872.2.5.4.1.1.3.3.1.2',
         # Real server
@@ -74,6 +76,8 @@ class AlteonCollector(GenericCollector):
         'gslbCurCfgRuleState': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.2.1.2',
         'gslbCurCfgMetricMetric': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.5.1.3',
         'gslbNewCfgMetricMetric': '.1.3.6.1.4.1.1872.2.5.4.1.3.5.6.1.3',
+        # Misc stuff
+        'slbStatRServerFailures': '.1.3.6.1.4.1.1872.2.5.4.2.2.1.4',
         }
 
     kind = "AAS"
@@ -211,6 +215,12 @@ class AlteonCollector(GenericCollector):
         14: "none",
         15: "persistence",
         }
+    pbind = {
+        2: "clientip",
+        3: "disabled",
+        4: "sslid",
+        5: "cookie",
+        }
 
     def parse(self, vs=None, rs=None):
         """
@@ -292,9 +302,11 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgVirtServiceUDPBalance', v, s),
             ('slbCurCfgVirtServiceRealPort', v, s),
             ('slbCurCfgVirtServiceUDPBalance', v, s),
+            ('slbCurCfgVirtServicePBind', v, s),
             ('slbCurCfgGroupMetric', g),
             ('slbCurCfgVirtServerState', v),
             ('slbCurCfgGroupHealthCheckLayer', g),
+            ('slbCurCfgGroupHealthUrl', g),
             ('slbCurCfgGroupBackupServer', g),
             ('slbCurCfgGroupBackupGroup', g),
             ('slbCurCfgGroupRealServers', g)))
@@ -323,6 +335,12 @@ class AlteonCollector(GenericCollector):
             self.states[self.cache(('slbCurCfgVirtServerState', v))]
         vs.extra["healthcheck"] = self.healthchecks.get(
             self.cache(('slbCurCfgGroupHealthCheckLayer', g)),
+            "unknown")
+        vs.extra["url"] = self.cache(('slbCurCfgGroupHealthUrl', g))
+        if not vs.extra["url"]:
+            del vs.extra["url"]
+        vs.extra["pbind"] = self.pbind.get(
+            self.cache(('slbCurCfgVirtServicePBind', v, s)),
             "unknown")
 
         # Find and attach real servers
@@ -405,7 +423,8 @@ class AlteonCollector(GenericCollector):
             ('slbCurCfgRealServerState', r),
             ('slbCurCfgRealServerPingInterval', r),
             ('slbCurCfgRealServerFailRetry', r),
-            ('slbCurCfgRealServerSuccRetry', r)))
+            ('slbCurCfgRealServerSuccRetry', r),
+            ('slbStatRServerFailures', r)))
         yield c
         c.getResult()
 
@@ -455,13 +474,15 @@ class AlteonCollector(GenericCollector):
         else:
             state = self.status[self.cache(('slbRealServerInfoState', r))]
             rs = SorryServer(name, rip, rport, protocol, state)
-        pi, fr, sr = self.cache(
+        pi, fr, sr, fail = self.cache(
             ('slbCurCfgRealServerPingInterval', r),
             ('slbCurCfgRealServerFailRetry', r),
-            ('slbCurCfgRealServerSuccRetry', r))
+            ('slbCurCfgRealServerSuccRetry', r),
+            ('slbStatRServerFailures', r))
         rs.extra.update({'ping interval': pi,
                          'fail retry': fr,
-                         'success retry': sr})
+                         'success retry': sr,
+                         'failures': fail})
         yield rs
         return
 

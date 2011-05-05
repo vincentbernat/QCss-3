@@ -17,6 +17,14 @@ from qcss3.collector.service import CollectorService
 from qcss3.web.web import WebMainPage, MetaWebMainPage
 
 def makeService(config):
+
+    # Use psyco if available
+    try:
+        import psyco
+        psyco.full()
+    except ImportError:
+        pass
+
     configfile = yaml.load(file(config['config'], 'rb').read())
     application = service.MultiService()
 

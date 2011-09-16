@@ -293,7 +293,8 @@ class F5LTMCollector(GenericCollector):
                                                op, 1, orip, port))
         # Actions
         if self.proxy.writable:
-            if self.cache(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)) == 1:
+            # ltmPoolMemberNewSessionEnable == 1 means user disabled
+            if self.cache(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)) != 1:
                 rs.actions['disable'] = 'Disable (permanent)'
             else:
                 rs.actions['enable'] = 'Enable (permanent)'
@@ -342,7 +343,7 @@ class F5LTMCollector(GenericCollector):
         d = defer.waitForDeferred(
             self.proxy.set((self.oids['ltmPoolMemberNewSessionEnable'],
                             op, 1, orip, port),
-                           action.endswith("enable") and 1 or 0))
+                           action.endswith("enable") and 2 or 1))
         yield d
         d.getResult()
         yield True

@@ -45,6 +45,8 @@ class F5LTMCollector(GenericCollector):
         'ltmPoolMbrStatusAvailState': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.5',
         'ltmPoolMbrStatusEnabledState': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.6',
         'ltmPoolMbrStatusDetailReason': '.1.3.6.1.4.1.3375.2.2.5.6.2.1.8',
+        # HTTP class
+        'ltmHttpClassPoolName': '.1.3.6.1.4.1.3375.2.2.6.15.1.2.1.4',
         # Virtual servers
         'ltmVirtualServAddrType': '.1.3.6.1.4.1.3375.2.2.10.1.2.1.2',
         'ltmVirtualServAddr': '.1.3.6.1.4.1.3375.2.2.10.1.2.1.3',
@@ -53,6 +55,7 @@ class F5LTMCollector(GenericCollector):
         'ltmVirtualServTranslateAddr': '.1.3.6.1.4.1.3375.2.2.10.1.2.1.13',
         'ltmVirtualServDefaultPool': '.1.3.6.1.4.1.3375.2.2.10.1.2.1.19',
         'ltmVirtualServProfileType': '.1.3.6.1.4.1.3375.2.2.10.5.2.1.3',
+        'ltmVsHttpClassProfileName': '.1.3.6.1.4.1.3375.2.2.10.12.2.1.2',
         'ltmVsStatusAvailState': '.1.3.6.1.4.1.3375.2.2.10.13.2.1.2',
         'ltmVsStatusEnabledState': '.1.3.6.1.4.1.3375.2.2.10.13.2.1.3',
         'ltmVsStatusDetailReason': '.1.3.6.1.4.1.3375.2.2.10.13.2.1.5',
@@ -93,9 +96,14 @@ class F5LTMCollector(GenericCollector):
 
     def parse(self, vs=None, rs=None):
         """
-        Parse vs and rs into vs, r, p
+        Parse vs and rs into vs, httpclass, r, p
         """
         if vs is not None:
+            httpclass = None
+            mo = re.match(r"(.+)\+(.+)", vs)
+            if mo:
+                vs = mo.group(1)
+                httpclass = mo.group(2)
             if rs is not None:
                 mo = re.match(r"([\d\.]+):(\d+)", rs)
                 if not mo:
@@ -105,9 +113,9 @@ class F5LTMCollector(GenericCollector):
                     socket.inet_aton(r)
                 except:
                     raise ValueError("%r is not a valid IP:port" % rs)
-                return vs, r, p
-            return vs, None, None
-        return None, None, None
+                return vs, httpclass, r, p
+            return vs, httpclass, None, None
+        return None, None, None, None
 
     def collect(self, vs=None, rs=None):
         """
@@ -116,14 +124,14 @@ class F5LTMCollector(GenericCollector):
         @param vs: any string identifying a virtual server
         @param rs: IP:port identifying a pool member
         """
-        vs, r, p = self.parse(vs, rs)
+        vs, httpclass, r, p = self.parse(vs, rs)
         if vs is not None:
             if r is not None:
                 # Collect data to refresh a specific real server
-                d = self.process_rs(vs, r, p)
+                d = self.process_rs(vs, httpclass, r, p)
             else:
                 # Collect data to refresh a virtual server
-                d = self.process_vs(vs)
+                d = self.process_vs(vs, httpclass)
         else:
             # Otherwise, collect everything
             d = self.process_all()
@@ -141,22 +149,32 @@ class F5LTMCollector(GenericCollector):
             w.getResult()
 
         # For each virtual server, build it
-        for v in self.cache('ltmVirtualServAddrType'):
-            v = oid2str(v)
-            vs = defer.waitForDeferred(self.process_vs(v))
-            yield vs
-            vs = vs.getResult()
-            if vs is not None:
-                self.lb.virtualservers["%s" % v] = vs
+        for ov in self.cache('ltmVirtualServAddrType'):
+            # Grab HTTP class
+            try:
+                classes = self.cache(('ltmVsHttpClassProfileName', ".".join([str(x) for x in ov]))).values()
+            except KeyError as e:
+                classes = []
+            for httpclass in classes + [None]:
+                v = oid2str(ov)
+                vs = defer.waitForDeferred(self.process_vs(v, httpclass))
+                yield vs
+                vs = vs.getResult()
+                if vs is not None:
+                    if httpclass is not None:
+                        self.lb.virtualservers["%s+%s" % (v, httpclass)] = vs
+                    else:
+                        self.lb.virtualservers[v] = vs
         yield self.lb
         return
 
     @defer.deferredGenerator
-    def process_vs(self, v):
+    def process_vs(self, v, httpclass):
         """
         Process data for a given virtual server when no real server is provided
 
         @param v: virtual server
+        @param httpclass: HTTP class to use (or C{None} for default pool) to select pool
         @return: a maybe deferred C{IVirtualServer}
         """
         ov = str2oid(v)
@@ -178,11 +196,21 @@ class F5LTMCollector(GenericCollector):
             return
 
         # Get pool
-        p = self.cache(('ltmVirtualServDefaultPool', ov))
-        if not p:
-            log.msg("In %r, no pool for %s, skip it" % (self.lb.name, v))
-            yield None
-            return
+        if httpclass is None:
+            p = self.cache(('ltmVirtualServDefaultPool', ov))
+            if not p:
+                log.msg("In %r, no pool for %s, skip it" % (self.lb.name, v))
+                yield None
+                return
+        else:
+            oc = str2oid(httpclass)
+            p = defer.waitForDeferred(self.cache_or_get(('ltmHttpClassPoolName', oc)))
+            yield p
+            p = p.getResult()
+            if not p:
+                log.msg("In %r, no pool for %s (class %s), skip it" % (self.lb.name, v, httpclass))
+                yield None
+                return
         op = str2oid(p)
         oids = []
         for o in self.oids:
@@ -200,7 +228,10 @@ class F5LTMCollector(GenericCollector):
         yield protocol
         protocol = protocol.getResult()
         mode = self.modes[self.cache(('ltmPoolLbMode', op))]
-        vs = VirtualServer(v, vip, protocol, mode)
+        vs = VirtualServer(httpclass is None and v or ("%s+%s" % (v, httpclass)),
+                           vip, protocol, mode)
+        if httpclass:
+            vs.extra["http class"] = httpclass
         vs.extra["vs availability state"] = \
             self.availstates[self.cache(('ltmVsStatusAvailState', ov))]
         vs.extra["vs enabled state"] = \
@@ -236,7 +267,7 @@ class F5LTMCollector(GenericCollector):
         for r in self.cache(('ltmPoolMbrStatusAvailState', op, 1, 4)):
             rip = ".".join(str(a) for a in r[:4])
             port = r[-1]
-            rs = defer.waitForDeferred(self.process_rs(v, rip, port))
+            rs = defer.waitForDeferred(self.process_rs(v, httpclass, rip, port))
             yield rs
             rs = rs.getResult()
             if rs is not None:
@@ -246,18 +277,23 @@ class F5LTMCollector(GenericCollector):
         return
 
     @defer.deferredGenerator
-    def process_rs(self, v, rip, port):
+    def process_rs(self, v, httpclass, rip, port):
         """
         Process data for a given virtual server and real server.
 
         @param v: virtual server
+        @param httpclass: HTTP class (or C{None} for default pool)
         @param rip: real IP
         @param port: port
         """
         # Retrieve some data if needed:
         ov = str2oid(v)
         orip = str2oid(socket.inet_aton(rip))
-        p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        if httpclass is None:
+            p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        else:
+            oc = str2oid(httpclass)
+            p = defer.waitForDeferred(self.cache_or_get(('ltmHttpClassPoolName', oc)))
         yield p
         p = p.getResult()
         op = str2oid(p)
@@ -327,7 +363,7 @@ class F5LTMCollector(GenericCollector):
         if action not in ["enable", "disable", "operenable", "operdisable"]:
             yield None
             return
-        v, rip, port = self.parse(vs, rs)
+        v, httpclass, rip, port = self.parse(vs, rs)
         if rip is None:
             yield {}
             return
@@ -335,7 +371,11 @@ class F5LTMCollector(GenericCollector):
         # Get pool
         ov = str2oid(v)
         orip = str2oid(socket.inet_aton(rip))
-        p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        if httpclass is None:
+            p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
+        else:
+            oc = str2oid(httpclass)
+            p = defer.waitForDeferred(self.cache_or_get(('ltmHttpClassPoolName', oc)))
         yield p
         p = p.getResult()
         op = str2oid(p)

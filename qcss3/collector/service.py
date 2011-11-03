@@ -12,6 +12,7 @@ from twisted.names import client
 from twisted.python import log
 
 import qcss3.collector.loadbalancer
+from qcss3.collector.loadbalancer.multi import MultiCollectorFactory
 from qcss3.collector.proxy import AgentProxy
 from qcss3.collector.datastore import LoadBalancer
 from qcss3.collector.database import IDatabaseWriter
@@ -248,14 +249,19 @@ class LoadBalancerCollector:
         if len(plugins) == 1:
             print "Using %s to collect data from %s" % (str(plugins[0].__class__),
                                                         self.lb)
+            self.collector = plugins[0].buildCollector(self.config, self.proxy,
+                                                       self.lb, self.description)
         elif plugins:
-            raise NoPlugin, "Too many plugins available for %s: %s" % (
-                [str(plugin.__class__) for plugin in plugins], self.lb)
+            print "Using multiple plugins to collect data from %s : %s" % (
+                self.lb,
+                ", ".join([str(x.__class__) for x in plugins]))
+            self.collector = MultiCollectorFactory(plugins).buildCollector(self.config,
+                                                                           self.proxy,
+                                                                           self.lb,
+                                                                           self.description)
         else:
             raise NoPlugin, "No plugin available for %s" % self.lb
         self.proxy.version = 2  # Switch to version 2
-        self.collector = plugins[0].buildCollector(self.config, self.proxy,
-                                                   self.lb, self.description)
         yield self.collector
         return
 

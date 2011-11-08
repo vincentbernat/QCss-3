@@ -240,8 +240,7 @@ class F5LTMCollector(GenericCollector):
             self.cache(('ltmVsStatusDetailReason', ov))
         vs.extra["address translation"] = \
             self.cache(('ltmVirtualServTranslateAddr', ov)) == 1 and "enabled" or "disabled"
-        vs.extra["pool name"] = \
-            self.cache(('ltmVirtualServDefaultPool', ov))
+        vs.extra["pool name"] = p
         vs.extra["pool availability state"] = \
             self.availstates[self.cache(('ltmPoolStatusAvailState', op))]
         vs.extra["pool enabled state"] = \

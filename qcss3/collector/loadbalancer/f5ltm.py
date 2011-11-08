@@ -153,7 +153,7 @@ class F5LTMCollector(GenericCollector):
             # Grab HTTP class
             try:
                 classes = self.cache(('ltmVsHttpClassProfileName', ".".join([str(x) for x in ov]))).values()
-            except KeyError as e:
+            except KeyError:
                 classes = []
             for httpclass in classes + [None]:
                 v = oid2str(ov)

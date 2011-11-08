@@ -100,7 +100,7 @@ class F5LTMCollector(GenericCollector):
         """
         if vs is not None:
             httpclass = None
-            mo = re.match(r"(.+)\+(.+)", vs)
+            mo = re.match(r"(.+);(.+)", vs)
             if mo:
                 vs = mo.group(1)
                 httpclass = mo.group(2)
@@ -162,7 +162,7 @@ class F5LTMCollector(GenericCollector):
                 vs = vs.getResult()
                 if vs is not None:
                     if httpclass is not None:
-                        self.lb.virtualservers["%s+%s" % (v, httpclass)] = vs
+                        self.lb.virtualservers["%s;%s" % (v, httpclass)] = vs
                     else:
                         self.lb.virtualservers[v] = vs
         yield self.lb
@@ -228,7 +228,7 @@ class F5LTMCollector(GenericCollector):
         yield protocol
         protocol = protocol.getResult()
         mode = self.modes[self.cache(('ltmPoolLbMode', op))]
-        vs = VirtualServer(httpclass is None and v or ("%s+%s" % (v, httpclass)),
+        vs = VirtualServer(httpclass is None and v or ("%s;%s" % (v, httpclass)),
                            vip, protocol, mode)
         if httpclass:
             vs.extra["http class"] = httpclass

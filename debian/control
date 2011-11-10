@@ -15,11 +15,3 @@ XB-Python-Version: ${python:Versions}
 Description: load-balancer web service
  QCss3 is an application to gather information from various load
  balancer appliances and present this information as a web service.
-
-Package: qcss3-dbg
-Architecture: any
-Section: debug
-Depends: ${misc:Depends}, qcss3 (=${binary:Version})
-Description: load-balancer web service (debug symbols)
- QCss3 is an application to gather information from various load
- balancer appliances and present this information as a web service.

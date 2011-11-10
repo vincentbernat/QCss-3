@@ -251,11 +251,9 @@ class HAProxyCollectorFactory:
 
         The OID is of no use here, we check that we have a HAProxy subagent.
         """
-        # We check if there is something in the alProcessTable
-        d = proxy.getnext('.1.3.6.1.4.1.23263.4.2.1.3.1.1.1')
-        d.addCallbacks(lambda x: x.keys() and \
-                           x.keys()[0].startswith(".1.3.6.1.4.1.23263.4.2.1.3.1.1.1"),
-                       lambda x: False)
+        # We check if there is at least one process in the alProcessTable
+        d = proxy.get('.1.3.6.1.4.1.23263.4.2.1.3.1.1.1.1')
+        d.addCallbacks(lambda x: True, lambda x: False)
         return d
 
     def buildCollector(self, config, proxy, name, description):

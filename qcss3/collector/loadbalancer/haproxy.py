@@ -217,7 +217,8 @@ class HAProxyCollector(GenericCollector):
                 rip, rport = rip.split(":", 1)
                 rport = int(rport)
         weight = self.cache(("alServerWeight", pid, bid, rid))
-        state = self.cache(("alServerActive", pid, bid, rid)) and "up" or "down"
+        # The server is up if it is not considered "DOWN"
+        state = (self.cache(("alServerStatus", pid, bid, rid)) == "DOWN") and "down" or "up"
         backup = self.cache(("alServerBackup", pid, bid, rid))
         if not backup:
             rs = RealServer(rname, rip, rport, "unknown", weight, state)

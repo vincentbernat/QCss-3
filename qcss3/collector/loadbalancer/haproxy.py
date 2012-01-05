@@ -223,11 +223,15 @@ class HAProxyCollector(GenericCollector):
             rs = RealServer(rname, rip, rport, "unknown", weight, state)
         else:
             rs = SorryServer(rname, rip, rport, "unknown", state)
-        down = self.cache(("alServerDownTime", pid, bid, rid))/100
         rs.extra["backend"] = bname
-        rs.extra["down time"] = "%02d:%02d:%02d" % (down / 3600, (down / 60) % 60, down % 60)
-        down = self.cache(("alBackendDownTime", pid, bid))/100
-        rs.extra["backend down time"] = "%02d:%02d:%02d" % (down / 3600, (down / 60) % 60, down % 60)
+        try:
+            down = self.cache(("alServerDownTime", pid, bid, rid))/100
+            rs.extra["down time"] = "%02d:%02d:%02d" % (down / 3600, (down / 60) % 60, down % 60)
+            down = self.cache(("alBackendDownTime", pid, bid))/100
+            rs.extra["backend down time"] = "%02d:%02d:%02d" % (down / 3600, (down / 60) % 60, down % 60)
+        except KeyError:
+            # No downtime available, don't panic
+            pass
         rs.extra["status"] = self.cache(("alServerStatus", pid, bid, rid))
         rs.extra["backend status"] = self.cache(("alBackendStatus", pid, bid))
         yield rs

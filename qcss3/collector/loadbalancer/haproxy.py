@@ -217,7 +217,7 @@ class HAProxyCollector(GenericCollector):
                 rip, rport = rip.split(":", 1)
                 rport = int(rport)
         weight = self.cache(("alServerWeight", pid, bid, rid))
-        # The server is up if it is not considered "DOWN"
+        # The server is up if it is not considered "DOWN" (it can be UP, DOWN or MAINT)
         state = (self.cache(("alServerStatus", pid, bid, rid)) == "DOWN") and "down" or "up"
         backup = self.cache(("alServerBackup", pid, bid, rid))
         if not backup:
@@ -235,6 +235,12 @@ class HAProxyCollector(GenericCollector):
             pass
         rs.extra["status"] = self.cache(("alServerStatus", pid, bid, rid))
         rs.extra["backend status"] = self.cache(("alBackendStatus", pid, bid))
+        # Actions
+        if self.proxy.writable:
+            if rs.extra["status"] == "MAINT":
+                rs.actions['enable'] = "Enable (temporary)"
+            else:
+                rs.actions['disable'] = "Disable (temporary)"
         yield rs
         return
 
@@ -245,6 +251,19 @@ class HAProxyCollector(GenericCollector):
 
         @param action: action to be executed
         """
+        pid, front, back, serv = self.parse(vs, rs)
+        if serv is not None and action in ["enable", "disable"]:
+            if action == "enable":
+                action = "UP"
+            else:
+                action = "MAINT"
+            d = defer.waitForDeferred(
+                self.proxy.set((self.oids['alServerStatus'], pid, back, serv), action))
+            yield d
+            d.getResult()
+            yield True
+            return
+        yield None
         return
 
 class HAProxyCollectorFactory:

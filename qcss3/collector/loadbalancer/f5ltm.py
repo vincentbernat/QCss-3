@@ -190,8 +190,8 @@ class F5LTMCollector(GenericCollector):
         c.getResult()
 
         # No IPv6 virtual server
-        if self.cache(('ltmVirtualServAddrType', ov)) != 1:
-            log.msg("In %r, unable to handle IPv6 virtual server %s, skip it" % (self.lb.name, v))
+        if self.cache(('ltmVirtualServAddrType', ov)) not in [1, 2]:
+            log.msg("In %r, unknown address type for virtual server %s, skip it" % (self.lb.name, v))
             yield None
             return
 
@@ -222,8 +222,14 @@ class F5LTMCollector(GenericCollector):
         yield c
         c.getResult()
 
-        vip = "%s:%d" % (socket.inet_ntoa(self.cache(('ltmVirtualServAddr', ov))),
-                         self.cache(('ltmVirtualServPort', ov)))
+        if self.cache(('ltmVirtualServAddrType', ov)) == 1:
+            vip = "%s:%d" % (socket.inet_ntop(socket.AF_INET,
+                                              self.cache(('ltmVirtualServAddr', ov))),
+                             self.cache(('ltmVirtualServPort', ov)))
+        else:
+            vip = "[%s]:%d" % (socket.inet_ntop(socket.AF_INET6,
+                                              self.cache(('ltmVirtualServAddr', ov))),
+                             self.cache(('ltmVirtualServPort', ov)))
         protocol = defer.waitForDeferred(self.get_protocol(ov))
         yield protocol
         protocol = protocol.getResult()

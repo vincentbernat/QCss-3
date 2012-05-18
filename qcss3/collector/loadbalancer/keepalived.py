@@ -403,14 +403,14 @@ class KeepalivedCollector(GenericCollector):
         if r is None:
             yield None
             return
-        if action == "disable":
+        if action == "disable" or action == "operdisable":
             d = defer.waitForDeferred(
                 self.proxy.set((self.oids['realServerWeight'], v, r), 0))
             yield d
             d.getResult()
             yield True
             return
-        if action == "enable":
+        if action == "enable" or action == "operenable":
             try:
                 weight = int(actionargs[0])
             except ValueError, KeyError:

@@ -30,6 +30,7 @@ class F5LTMCollector(GenericCollector):
     oids = {
         # Nodes
         'ltmNodeAddrScreenName': '.1.3.6.1.4.1.3375.2.2.4.1.2.1.12',
+        'ltmNodeAddrNewSessionEnable': '.1.3.6.1.4.1.3375.2.2.4.1.2.1.9',
         # Pools
         'ltmPoolLbMode': '.1.3.6.1.4.1.3375.2.2.5.1.2.1.2',
         'ltmPoolStatusAvailState': '.1.3.6.1.4.1.3375.2.2.5.5.2.1.2',
@@ -311,10 +312,16 @@ class F5LTMCollector(GenericCollector):
         yield c
         c.getResult()
 
-        name = defer.waitForDeferred(self.cache_or_get(('ltmNodeAddrScreenName',
-                                                        1, orip)))
-        yield name
-        name = name.getResult()
+        oids = []
+        for o in self.oids:
+            if o.startswith("ltmNodeAddr"):
+                oids.append((o, 1, orip))
+        oids = tuple(oids)
+        c = defer.waitForDeferred(self.cache_or_get(*oids))
+        yield c
+        c.getResult()
+
+        name = self.cache(('ltmNodeAddrScreenName', 1, orip))
         protocol = defer.waitForDeferred(self.get_protocol(ov))
         yield protocol
         protocol = protocol.getResult()
@@ -339,6 +346,10 @@ class F5LTMCollector(GenericCollector):
                 rs.actions['disable'] = 'Disable (permanent)'
             else:
                 rs.actions['enable'] = 'Enable (permanent)'
+            if self.cache(('ltmNodeAddrNewSessionEnable', 1, orip)) != 1:
+                rs.actions['disableall'] = 'Disable globally (permanent)'
+            else:
+                rs.actions['enableall'] = 'Enable globally (permanent)'
         yield rs
         return
 
@@ -365,17 +376,27 @@ class F5LTMCollector(GenericCollector):
         """
         Execute an action.
         """
-        if action not in ["enable", "disable", "operenable", "operdisable"]:
+        if action not in ["enable", "disable", "operenable", "operdisable",
+                          "enableall", "disableall"]:
             yield None
             return
         v, httpclass, rip, port = self.parse(vs, rs)
         if rip is None:
             yield {}
             return
+        orip = str2oid(socket.inet_aton(rip))
+
+        if action == "enableall" or action == "disableall":
+            d = defer.waitForDeferred(
+                self.proxy.set((self.oids['ltmNodeAddrNewSessionEnable'], 1, orip),
+                               (action == "enableall") and 2 or 1))
+            yield d
+            d.getResult()
+            yield True
+            return
 
         # Get pool
         ov = str2oid(v)
-        orip = str2oid(socket.inet_aton(rip))
         if httpclass is None:
             p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
         else:

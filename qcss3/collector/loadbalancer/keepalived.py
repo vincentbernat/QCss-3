@@ -374,6 +374,8 @@ class KeepalivedCollector(GenericCollector):
                 "inhibit"
             # Actions
             if self.proxy.writable:
+                rs.actions['disableall'] = 'Disable globally (temporary)'
+                rs.actions['enableall'] = 'Enable globally (temporary)'
                 curweight = self.cache(('realServerWeight', v, r))
                 for weight in range(0, 6):
                     if weight == curweight:
@@ -401,14 +403,14 @@ class KeepalivedCollector(GenericCollector):
         if r is None:
             yield None
             return
-        if action.endswith("disable"):
+        if action == "disable":
             d = defer.waitForDeferred(
                 self.proxy.set((self.oids['realServerWeight'], v, r), 0))
             yield d
             d.getResult()
             yield True
             return
-        if action.endswith("enable"):
+        if action == "enable":
             try:
                 weight = int(actionargs[0])
             except ValueError, KeyError:
@@ -417,6 +419,27 @@ class KeepalivedCollector(GenericCollector):
                 self.proxy.set((self.oids['realServerWeight'], v, r), weight))
             yield d
             d.getResult()
+            yield True
+            return
+        if action == "enableall" or action == "disableall":
+            # We need to find all the appropriate servers. We walk
+            # realServerAdress for this, right now.
+            d = defer.waitForDeferred(self.proxy.walk(self.oids['realServerAddress']))
+            yield d
+            d.getResult()
+            match = []
+            for vo,ro in self.cache('realServerAddress'):
+                if self.cache(('realServerAddress', vo, ro)) == \
+                        self.cache(('realServerAddress', v ,r)):
+                    match.append((vo, ro))
+            # We need to enable/disable all those servers in match. We
+            # do it with one SET request.
+            weight = (action == "enableall") and 1 or 0
+            for m in match:
+                d = defer.waitForDeferred(
+                    self.proxy.set((self.oids['realServerWeight'], m[0], m[1]), weight))
+                yield d
+                d.getResult()
             yield True
             return
         yield None

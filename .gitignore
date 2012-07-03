@@ -1,0 +1,8 @@
+/apidocs/
+/build/
+
+*.pyc
+*~
+
+*.so
+dropin.cache

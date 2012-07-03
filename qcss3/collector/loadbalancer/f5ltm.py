@@ -10,6 +10,7 @@ consider the default pool). Pool members are mapped to real servers.
 """
 
 import socket
+import struct
 import re
 
 from twisted.plugin import IPlugin
@@ -19,7 +20,7 @@ from zope.interface import implements
 
 from qcss3.collector.icollector import ICollector, ICollectorFactory
 from qcss3.collector.datastore import LoadBalancer, VirtualServer, RealServer, SorryServer
-from qcss3.collector.loadbalancer.generic import GenericCollector, str2oid, oid2str
+from qcss3.collector.loadbalancer.generic import GenericCollector, str2oid, oid2str, ip2oid
 
 class F5LTMCollector(GenericCollector):
     """
@@ -106,14 +107,15 @@ class F5LTMCollector(GenericCollector):
                 vs = mo.group(1)
                 httpclass = mo.group(2)
             if rs is not None:
-                mo = re.match(r"([\d\.]+):(\d+)", rs)
+                mo = re.match(r"([0-9A-Fa-f\.:]+),(\d+)", rs)
                 if not mo:
                     raise ValueError("%r is not a valid real server" % rs)
                 r, p = mo.group(1), int(mo.group(2))
                 try:
-                    socket.inet_aton(r)
+                    socket.inet_pton(":" in r and socket.AF_INET6 or socket.AF_INET,
+                                     r)
                 except:
-                    raise ValueError("%r is not a valid IP:port" % rs)
+                    raise ValueError("%r is not a valid IP,port" % rs)
                 return vs, httpclass, r, p
             return vs, httpclass, None, None
         return None, None, None, None
@@ -190,7 +192,7 @@ class F5LTMCollector(GenericCollector):
         yield c
         c.getResult()
 
-        # No IPv6 virtual server
+        # IPv6 or IPv4 virtual server
         if self.cache(('ltmVirtualServAddrType', ov)) not in [1, 2]:
             log.msg("In %r, unknown address type for virtual server %s, skip it" % (self.lb.name, v))
             yield None
@@ -261,23 +263,20 @@ class F5LTMCollector(GenericCollector):
                 if o.startswith('ltmPoolMbr') or o.startswith('ltmPoolMember'):
                     # F5 is buggy here, we need to walk all pool members
                     # pm = defer.waitForDeferred(
-                    #    self.proxy.walk("%s.%s.1.4" % (self.oids[o], op)))
+                    #    self.proxy.walk("%s.%s" % (self.oids[o], op)))
                     pm = defer.waitForDeferred(
                         self.proxy.walk(self.oids[o]))
                     yield pm
                     pm.getResult()
-        if not self.is_cached(('ltmPoolMbrStatusAvailState', op, 1, 4)):
-            log.msg("In %r, unable to handle IPv6 real servers for virtual server %s, skip it" % (self.lb.name, v))
-            yield None
-            return
-        for r in self.cache(('ltmPoolMbrStatusAvailState', op, 1, 4)):
-            rip = ".".join(str(a) for a in r[:4])
+        for r in self.cache(('ltmPoolMbrStatusAvailState', op)):
+            rip = socket.inet_ntop(r[0] == 1 and socket.AF_INET or socket.AF_INET6,
+                                   struct.pack("B"*r[1], *r[-(r[1]+1):-1]))
             port = r[-1]
             rs = defer.waitForDeferred(self.process_rs(v, httpclass, rip, port))
             yield rs
             rs = rs.getResult()
             if rs is not None:
-                vs.realservers["%s:%d" % (rip, port)] = rs
+                vs.realservers["%s,%d" % (rip, port)] = rs
 
         yield vs
         return
@@ -294,7 +293,7 @@ class F5LTMCollector(GenericCollector):
         """
         # Retrieve some data if needed:
         ov = str2oid(v)
-        orip = str2oid(socket.inet_aton(rip))
+        orip = ip2oid(rip)
         if httpclass is None:
             p = defer.waitForDeferred(self.cache_or_get(('ltmVirtualServDefaultPool', ov)))
         else:
@@ -306,7 +305,7 @@ class F5LTMCollector(GenericCollector):
         oids = []
         for o in self.oids:
             if o.startswith("ltmPoolMbr") or o.startswith("ltmPoolMember"):
-                oids.append((o, op, 1, orip, port))
+                oids.append((o, op, orip, port))
         oids = tuple(oids)
         c = defer.waitForDeferred(self.cache_or_get(*oids))
         yield c
@@ -315,38 +314,38 @@ class F5LTMCollector(GenericCollector):
         oids = []
         for o in self.oids:
             if o.startswith("ltmNodeAddr"):
-                oids.append((o, 1, orip))
+                oids.append((o, orip))
         oids = tuple(oids)
         c = defer.waitForDeferred(self.cache_or_get(*oids))
         yield c
         c.getResult()
 
-        name = self.cache(('ltmNodeAddrScreenName', 1, orip))
+        name = self.cache(('ltmNodeAddrScreenName', orip))
         protocol = defer.waitForDeferred(self.get_protocol(ov))
         yield protocol
         protocol = protocol.getResult()
-        weight = self.cache(('ltmPoolMemberWeight', op, 1, orip, port))
+        weight = self.cache(('ltmPoolMemberWeight', op, orip, port))
         avail, enabled, session = self.cache(
-            ('ltmPoolMbrStatusAvailState', op, 1, orip, port),
-            ('ltmPoolMbrStatusEnabledState', op, 1, orip, port),
-            ('ltmPoolMemberSessionStatus', op, 1, orip, port))
+            ('ltmPoolMbrStatusAvailState', op, orip, port),
+            ('ltmPoolMbrStatusEnabledState', op, orip, port),
+            ('ltmPoolMemberSessionStatus', op, orip, port))
         if session != 1 or self.enabledstates[enabled] != "enabled":
             state = "disabled"
         else:
             state = self.availstates[avail]
         rs = RealServer(name, rip, port, protocol, weight, state)
         rs.extra["detailed reason"] = self.cache(('ltmPoolMbrStatusDetailReason',
-                                                  op, 1, orip, port))
+                                                  op, orip, port))
         rs.extra["monitor rule"] = self.cache(('ltmPoolMemberMonitorRule',
-                                               op, 1, orip, port))
+                                               op, orip, port))
         # Actions
         if self.proxy.writable:
             # ltmPoolMemberNewSessionEnable == 1 means user disabled
-            if self.cache(('ltmPoolMemberNewSessionEnable', op, 1, orip, port)) != 1:
+            if self.cache(('ltmPoolMemberNewSessionEnable', op, orip, port)) != 1:
                 rs.actions['disable'] = 'Disable (permanent)'
             else:
                 rs.actions['enable'] = 'Enable (permanent)'
-            if self.cache(('ltmNodeAddrNewSessionEnable', 1, orip)) != 1:
+            if self.cache(('ltmNodeAddrNewSessionEnable', orip)) != 1:
                 rs.actions['disableall'] = 'Disable globally (permanent)'
             else:
                 rs.actions['enableall'] = 'Enable globally (permanent)'
@@ -384,11 +383,11 @@ class F5LTMCollector(GenericCollector):
         if rip is None:
             yield {}
             return
-        orip = str2oid(socket.inet_aton(rip))
+        orip = ip2oid(rip)
 
         if action == "enableall" or action == "disableall":
             d = defer.waitForDeferred(
-                self.proxy.set((self.oids['ltmNodeAddrNewSessionEnable'], 1, orip),
+                self.proxy.set((self.oids['ltmNodeAddrNewSessionEnable'], orip),
                                (action == "enableall") and 2 or 1))
             yield d
             d.getResult()
@@ -408,7 +407,7 @@ class F5LTMCollector(GenericCollector):
 
         d = defer.waitForDeferred(
             self.proxy.set((self.oids['ltmPoolMemberNewSessionEnable'],
-                            op, 1, orip, port),
+                            op, orip, port),
                            action.endswith("enable") and 2 or 1))
         yield d
         d.getResult()

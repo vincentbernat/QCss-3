@@ -9,6 +9,7 @@ There are also two helpers function to convert strings to OID and
 vice-versa.
 """
 
+import socket
 from twisted.internet import defer
 
 from qcss3.collector.datastore import LoadBalancer
@@ -25,6 +26,24 @@ def str2oid(string):
     """
     oid = ".".join([str(ord(a)) for a in string])
     return "%d.%s" % (len(string), oid)
+
+def ip2oid(ip):
+    """
+    Convert the given IP into an OID.
+
+    It is assumed that the OID will be prefixed by the IP type and its
+    length.
+
+    @param ip: IP address to convert
+    @return: OID as a string (not a tuple!)
+    """
+    return "%d.%d.%s" % (":" in ip and 2 or 1, # IPv4 or IPv6
+                         ":" in ip and 16 or 4, # Length
+                         ".".join([str(ord(a))
+                                   for a in socket.inet_pton(":" in ip and
+                                                             socket.AF_INET6 or
+                                                             socket.AF_INET,
+                                                             ip)]))
 
 def oid2str(oid):
     """

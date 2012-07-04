@@ -268,6 +268,10 @@ class F5LTMCollector(GenericCollector):
                         self.proxy.walk(self.oids[o]))
                     yield pm
                     pm.getResult()
+        if not self.is_cached(('ltmPoolMbrStatusAvailState', op)):
+            print "pool %s is empty..." % p
+            yield None
+            return
         for r in self.cache(('ltmPoolMbrStatusAvailState', op)):
             rip = socket.inet_ntop(r[0] == 1 and socket.AF_INET or socket.AF_INET6,
                                    struct.pack("B"*r[1], *r[-(r[1]+1):-1]))

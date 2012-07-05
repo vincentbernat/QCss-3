@@ -195,15 +195,12 @@ class KeepalivedCollector(GenericCollector):
             name = "fwmark %d" % self.cache(('virtualServerFwMark', v))
             vip = "mark%d:0" % self.cache(('virtualServerFwMark', v))
         elif virttype == "ip":
-            # We have an IP address. We only support IPv4.
-            if self.cache(('virtualServerAddrType', v)) != 1:
-                log.msg(
-                    "In %r, unable to handle IPv6 virtual server %d, skip it" % (
-                        self.lb.name, v))
-                yield None
-                return
-            ip = socket.inet_ntoa(self.cache(('virtualServerAddress', v)))
+            # We have an IP address.
+            ip = socket.inet_ntop(self.cache(('virtualServerAddrType', v)) == 1 and
+                                  socket.AF_INET or socket.AF_INET6,
+                                  self.cache(('virtualServerAddress', v)))
             name = "IP %s" % ip
+            if ":" in ip: ip = "[%s]" % ip
             vip = "%s:%d" % (ip, self.cache(('virtualServerPort', v)))
         elif virttype == "group":
             # Name is the name of the group
@@ -231,21 +228,32 @@ class KeepalivedCollector(GenericCollector):
                     for m in self.cache(('virtualServerGroupMemberType', g)):
                         grouptype = self.grouptypes[
                             self.cache(('virtualServerGroupMemberType', g, m))]
-                        if grouptype == "ip" or grouptype == "range":
-                            if self.cache(('virtualServerGroupMemberAddrType', g, m)) != 1:
-                                continue # Not IPv4
                         if grouptype == "ip":
-                            names.append("%s:%d" % (socket.inet_ntoa(
-                                        self.cache(('virtualServerGroupMemberAddress', g, m))),
+                            ip = socket.inet_ntop(
+                                self.cache(('virtualServerGroupMemberAddrType', g, m)) == 1 and
+                                socket.AF_INET or socket.AF_INET6,
+                                self.cache(('virtualServerGroupMemberAddress', g, m)))
+                            if ":" in ip: ip = "[%s]" % ip
+                            names.append("%s:%d" % (ip,
                                                     self.cache(('virtualServerGroupMemberPort',
                                                                 g, m))))
                         elif grouptype == "range":
-                            names.append("%s-%s:%d" % (socket.inet_ntoa(
-                                        self.cache(('virtualServerGroupMemberAddr1', g, m))),
-                                                       socket.inet_ntoa(
-                                        self.cache(('virtualServerGroupMemberAddr2', g, m))),
-                                                       self.cache(('virtualServerGroupMemberPort',
-                                                                   g, m))))
+                            ip1 = socket.inet_ntop(
+                                self.cache(('virtualServerGroupMemberAddrType', g, m)) == 1 and
+                                socket.AF_INET or socket.AF_INET6,
+                                self.cache(('virtualServerGroupMemberAddr1', g, m)))
+                            ip2 = socket.inet_ntop(
+                                self.cache(('virtualServerGroupMemberAddrType', g, m)) == 1 and
+                                socket.AF_INET or socket.AF_INET6,
+                                self.cache(('virtualServerGroupMemberAddr2', g, m)))
+                            if ":" in ip1:
+                                names.append("[%s-%s]:%d" % (ip1, ip2,
+                                                             self.cache(('virtualServerGroupMemberPort',
+                                                                         g, m))))
+                            else:
+                                names.append("%s-%s:%d" % (ip1, ip2,
+                                                           self.cache(('virtualServerGroupMemberPort',
+                                                                       g, m))))
                         elif grouptype == "fwmark":
                             names.append("mark%d:0" % self.cache((
                                         'virtualServerGroupMemberFwMark', g, m)))
@@ -339,11 +347,9 @@ class KeepalivedCollector(GenericCollector):
         c.getResult()
 
         # Build the real server
-        if self.cache(('realServerAddrType', v, r)) != 1:
-            log.msg("In %r, real server %d for virtual server %v is not IPv4, skip it" % (self.lb.name, r, v))
-            yield None
-            return
-        rip = socket.inet_ntoa(self.cache(('realServerAddress', v, r)))
+        rip = socket.inet_ntop(self.cache(('realServerAddrType', v, r)) == 1 and
+                               socket.AF_INET or socket.AF_INET6,
+                               self.cache(('realServerAddress', v, r)))
         name = rip
         rport = self.cache(('realServerPort', v, r))
         protocol = defer.waitForDeferred(self.cache_or_get(('virtualServerProtocol', v)))

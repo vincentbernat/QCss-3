@@ -16,7 +16,7 @@ from qcss3.collector.loadbalancer.multi import MultiCollectorFactory
 from qcss3.collector.proxy import AgentProxy
 from qcss3.collector.datastore import LoadBalancer
 from qcss3.collector.database import IDatabaseWriter
-from qcss3.collector.exception import NoPlugin
+from qcss3.collector.exception import NoPlugin, UnknownLoadBalancer
 from qcss3.collector.icollector import ICollectorFactory
 
 class CollectorService(service.Service):

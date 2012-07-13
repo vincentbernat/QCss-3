@@ -199,6 +199,7 @@ class LoadBalancerCollector:
         self.proxy = None
         self.collector = None
         self.description = None
+        self.lock = defer.DeferredLock()
 
     def getProxy(self):
         """
@@ -231,12 +232,16 @@ class LoadBalancerCollector:
         self.oid = results['.1.3.6.1.2.1.1.2.0']
         return proxy
 
-    @defer.deferredGenerator
     def findCollector(self):
         """Find the plugin that will handle the load balancer"""
+        return self.lock.run(self._findCollector)
+
+    @defer.deferredGenerator
+    def _findCollector(self):
         if self.collector is not None:
             yield self.collector
             return
+
         plugins = []
         for plugin in getPlugins(ICollectorFactory,
                                  qcss3.collector.loadbalancer):
